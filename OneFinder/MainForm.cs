@@ -40,7 +40,6 @@ namespace OneFinder
         private ModernTextBox   _searchBox    = null!;
         private ModernButton    _searchButton = null!;
         private CheckBox        _currentNotebookOnly = null!;
-        private CheckBox        _fastSearch = null!;
         private ListBox         _resultList   = null!;
         private Label           _statusLabel  = null!;
         private ProgressBar     _progress     = null!;
@@ -120,24 +119,24 @@ namespace OneFinder
 
             var titleLabel = new Label
             {
-                Text = "🔍 OneFinder",
+                Text = "🔍OneFinder",
                 Font = new Font("Microsoft YaHei", 18f, FontStyle.Bold),
                 ForeColor = ModernColors.Primary,
                 AutoSize = true,
-                Location = new Point(0, 8)
+                Location = new Point(0, 1)
             };
 
-            var subtitleLabel = new Label
-            {
-                Text = "OneNote 全文搜索工具",
-                Font = new Font("Microsoft YaHei", 9f),
-                ForeColor = ModernColors.TextSecondary,
-                AutoSize = true,
-                Location = new Point(0, 38)
-            };
+            //var subtitleLabel = new Label
+            //{
+            //    Text = "OneNote 全文搜索工具",
+            //    Font = new Font("Microsoft YaHei", 9f),
+            //    ForeColor = ModernColors.TextSecondary,
+            //    AutoSize = true,
+            //    Location = new Point(20, 1)
+            //};
 
             titlePanel.Controls.Add(titleLabel);
-            titlePanel.Controls.Add(subtitleLabel);
+            //titlePanel.Controls.Add(subtitleLabel);
 
             // ── Unified Search Container ─────────────────────────────────────────
             var searchContainer = new SearchBoxContainer
@@ -193,8 +192,8 @@ namespace OneFinder
             var optionsPanel = new FlowLayoutPanel
             {
                 Dock = DockStyle.Top,
-                Height = 32,
-                Padding = new Padding(4, 8, 0, 0),
+                Height = 40,
+                Padding = new Padding(4, 1, 0, 4),
                 BackColor = Color.Transparent,
                 FlowDirection = FlowDirection.LeftToRight,
                 WrapContents = false,
@@ -209,18 +208,7 @@ namespace OneFinder
                 Checked = false,
             };
 
-            _fastSearch = new CheckBox
-            {
-                Text = "快速搜索",
-                AutoSize = true,
-                Font = new Font("Microsoft YaHei", 9f),
-                ForeColor = ModernColors.TextSecondary,
-                Checked = false,
-                Margin = new Padding(18, 0, 0, 0),
-            };
-
             optionsPanel.Controls.Add(_currentNotebookOnly);
-            optionsPanel.Controls.Add(_fastSearch);
 
             // ── Results Card ─────────────────────────────────────────
             var resultsCard = new ModernCard
@@ -254,8 +242,8 @@ namespace OneFinder
             {
                 Dock = DockStyle.Bottom,
                 Height = 36,
-                BackColor = ModernColors.CardBackground,
-                Padding = new Padding(20, 6, 20, 6),
+                BackColor = ModernColors.Background,
+                Padding = new Padding(10, 10, 0, 3),
             };
             statusPanel.Paint += (s, e) =>
             {

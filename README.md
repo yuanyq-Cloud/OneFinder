@@ -2,34 +2,33 @@
 
 一个轻量 Windows 桌面工具，通过 **OneNote COM API** 直接遍历所有笔记本页面并进行全文搜索，无需 Windows Search 索引。
 
-## 功能
+## 界面预览
 
-- 通过 OneNote COM API 获取所有笔记本 / 节 / 页面层次结构
-- 对每页的完整 XML 内容做大小写不敏感全文匹配
-- 返回"笔记本 › 节 › 页面"三级路径列表
-- 双击或 Enter 键直接在 OneNote 中跳转到对应页面
-- 搜索在后台线程运行，不阻塞 UI
+<img src="UI.png" width="600" alt="OneFinder 界面预览">
 
 ## 前提条件
 
+**安装.msi（用户）**
+
 - Windows 10/11 x64
-- **已安装 Microsoft OneNote 2016 或 Microsoft 365 OneNote 桌面版**（OneNote COM 服务器必须存在）
-- .NET 8 Runtime（Windows）
-- Visual Studio 2022 或 MSBuild 17+ 用于编译
+- 已安装 Microsoft OneNote 或 Microsoft 365 OneNote 桌面版（OneNote COM 服务器必须存在）
+- .NET 8 Desktop Runtime（x64） — 若未安装需从 Microsoft 下载
+
+**开发 / 构建（开发者）**
+
+- Visual Studio 2022+ 或 MSBuild 17+（用于从源码编译和发布）
+- .NET SDK 8.x（用于 `dotnet build` / `dotnet publish`）
 
 ## 构建
 
-```bash
-# 在仓库根目录
-dotnet restore .\OneFinder\OneFinder.csproj
-dotnet build .\OneFinder\OneFinder.csproj -c Release
-```
+优先使用仓库根目录下的一键脚本 `build.ps1`（会完成 AddIn 的 MSBuild 构建、主程序的 `dotnet publish`，以及使用 WiX 打包 MSI）。
 
-或直接用 Visual Studio 打开 `OneFinder\OneFinder.csproj` 后按 F5/Ctrl+F5。
 
 ## 使用
 
-1. 启动 `OneFinder.exe`（OneNote 桌面版须已安装）
+1. 工具栏“开始”选项卡中找到OneFinder工具栏，点击"全文搜索"<br>
+<img src="UI-2.png" width="400" alt="OneFinder 界面预览">
+
 2. 在搜索框输入关键词，按 Enter 或点击"搜索"
 3. 等待扫描完成（底部状态栏显示当前扫描进度）
 4. 双击结果列表中的条目，OneNote 会自动跳转到对应页面
@@ -39,20 +38,30 @@ dotnet build .\OneFinder\OneFinder.csproj -c Release
 - 受密码保护的节会被自动跳过
 - 回收站中的页面同样被跳过
 - 笔记本越多、页面越多，首次扫描越慢；建议关键词尽量精确
+- 单个笔记本页面过多时，搜索期间OneNote可能会短暂未响应（由于 OneNote COM API 的架构限制，OneFinder 必须逐页调用 `GetPageContent()` 由 OneNote 主进程同步处理）
 
 ## 项目结构
 
 ```
 <repo-root>/
 ├── README.md
+├── build.ps1
+├── nuget.config
+├── OneFinder.sln
 ├── installer/
-│   └── Package.wxs          # MSI 安装包定义
-└── OneFinder/
-    ├── OneFinder.csproj     # 项目文件（net8.0-windows, x64）
-    ├── Program.cs           # 入口点
-    ├── MainForm.cs          # WinForms 主窗口 + 搜索 UI
-    ├── MainForm.Designer.cs # WinForms 设计器脚手架
-    ├── OneNoteService.cs    # OneNote COM API 封装 + 搜索逻辑
-    ├── USER_GUIDE.md        # 用户指南
-    └── CHANGELOG.md         # 更新日志
+│   ├── Package.wxs
+│   └── OneFinderSetup.wixpdb
+├── OneFinder/
+│   ├── OneFinder.csproj           # net8.0-windows, x64
+│   ├── Program.cs
+│   ├── MainForm.cs
+│   ├── MainForm.Designer.cs
+│   ├── OneNoteService.cs
+│   ├── USER_GUIDE.md
+│   └── CHANGELOG.md
+└── OneFinder.AddIn/
+    ├── OneFinder.AddIn.csproj     # .NET Framework 4.8 add-in for OneNote
+    ├── AddIn.cs
+    ├── Ribbon.xml
+    └── bin/                       # build outputs for add-in (net48)
 ```

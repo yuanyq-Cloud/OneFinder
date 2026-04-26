@@ -96,6 +96,12 @@ namespace OneFinder
 
         // OneNote XML 命名空间（版本号为 2013+）
         private static readonly XNamespace NS = "http://schemas.microsoft.com/office/onenote/2013/onenote";
+        private static readonly Regex BlockBreakTagRegex = new(@"<(?:br|hr)\s*/?>", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        private static readonly Regex BlockClosingTagRegex = new(@"</(?:p|div|li|tr|td|th|h[1-6])\s*>", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        private static readonly Regex HtmlTagRegex = new(@"<[^>]+>", RegexOptions.Singleline | RegexOptions.Compiled);
+        private static readonly Regex HeadingElementNameRegex = new(@"^h[1-6]$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        private static readonly Regex LiteralCDataRegex = new(@"<!\[CDATA\[(.*?)\]\]>", RegexOptions.Singleline | RegexOptions.Compiled);
+        private static readonly Regex WhitespaceRegex = new(@"\s+", RegexOptions.Compiled);
 
         public OneNoteService()
         {
@@ -112,33 +118,12 @@ namespace OneFinder
 
             try
             {
-                // 获取当前页面ID
-                string currentPageId = _app.Windows.CurrentWindow.CurrentPageId;
+                string? currentPageId = GetCurrentPageId();
                 if (string.IsNullOrEmpty(currentPageId)) return null;
 
-                // 获取完整层次结构
-                _app.GetHierarchy("", HierarchyScope.hsNotebooks, out string xml);
-                var doc = XDocument.Parse(xml);
-
-                // 遍历所有笔记本查找包含当前页面的笔记本
-                foreach (var notebook in doc.Descendants(NS + "Notebook"))
-                {
-                    string notebookId = notebook.Attribute("ID")?.Value ?? string.Empty;
-                    if (string.IsNullOrEmpty(notebookId)) continue;
-
-                    // 获取笔记本的所有页面
-                    _app.GetHierarchy(notebookId, HierarchyScope.hsPages, out string notebookXml);
-                    var notebookDoc = XDocument.Parse(notebookXml);
-
-                    // 检查当前页面是否在这个笔记本中
-                    var page = notebookDoc.Descendants(NS + "Page")
-                        .FirstOrDefault(p => p.Attribute("ID")?.Value == currentPageId);
-
-                    if (page != null)
-                    {
-                        return notebookId;
-                    }
-                }
+                _app.GetHierarchy(null, HierarchyScope.hsPages, out string hierarchyXml);
+                var hierarchy = XDocument.Parse(hierarchyXml);
+                return FindNotebookIdForPage(hierarchy, currentPageId);
             }
             catch
             {
@@ -162,24 +147,27 @@ namespace OneFinder
 
             var results = new List<PageResult>();
             string normalizedQuery = NormalizeWhitespace(query);
-            string queryLower = normalizedQuery.ToLowerInvariant();
 
-            // 如果需要仅搜索当前笔记本，获取当前笔记本ID
+            // 获取所有笔记本的层次结构 XML
+            _app.GetHierarchy(null, HierarchyScope.hsPages, out string hierarchyXml);
+            var hierarchy = XDocument.Parse(hierarchyXml);
+
+            // 如果需要仅搜索当前笔记本，直接复用已获取的层次结构
             string? currentNotebookId = null;
             if (currentNotebookOnly)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                currentNotebookId = GetCurrentNotebookId();
+                string? currentPageId = GetCurrentPageId();
+                currentNotebookId = string.IsNullOrEmpty(currentPageId)
+                    ? null
+                    : FindNotebookIdForPage(hierarchy, currentPageId);
+
                 if (string.IsNullOrEmpty(currentNotebookId))
                 {
                     progress?.Invoke("无法获取当前笔记本，将搜索所有笔记本");
                     currentNotebookOnly = false;
                 }
             }
-
-            // 获取所有笔记本的层次结构 XML
-            _app.GetHierarchy(null, HierarchyScope.hsPages, out string hierarchyXml);
-            var hierarchy = XDocument.Parse(hierarchyXml);
 
             foreach (var notebook in hierarchy.Descendants(NS + "Notebook"))
             {
@@ -226,7 +214,7 @@ namespace OneFinder
                             var hitObjectIds = new List<string>();
 
                             // 提取所有 T 元素（文本节点）
-                            ExtractTextMatches(pageDoc, queryLower, normalizedQuery.Length, snippets, hitObjectIds);
+                            ExtractTextMatches(pageDoc, normalizedQuery, snippets, hitObjectIds);
 
                             if (snippets.Count > 0)
                             {
@@ -255,7 +243,7 @@ namespace OneFinder
         /// <summary>
         /// 从页面 XML 中提取包含匹配文本的片段
         /// </summary>
-        private void ExtractTextMatches(XDocument pageDoc, string queryLower, int queryLength,
+        private void ExtractTextMatches(XDocument pageDoc, string query, 
             List<string> snippets, List<string> hitObjectIds)
         {
             foreach (var textElement in pageDoc.Descendants(NS + "T"))
@@ -263,12 +251,11 @@ namespace OneFinder
                 string text = BuildSearchableTextMirror(textElement);
                 if (string.IsNullOrWhiteSpace(text)) continue;
 
-                string textLower = text.ToLowerInvariant();
-                int index = textLower.IndexOf(queryLower, StringComparison.Ordinal);
+                int index = text.IndexOf(query, StringComparison.OrdinalIgnoreCase);
 
                 if (index >= 0)
                 {
-                    string snippet = ExtractSnippet(text, index, queryLength);
+                    string snippet = ExtractSnippet(text, index, query.Length);
                     snippets.Add(snippet);
 
                     var oeElement = textElement.Ancestors(NS + "OE").FirstOrDefault();
@@ -376,9 +363,9 @@ namespace OneFinder
                 return NormalizeWhitespace(parsedText);
             }
 
-            text = Regex.Replace(text, @"<(?:br|hr)\s*/?>", " ", RegexOptions.IgnoreCase);
-            text = Regex.Replace(text, @"</(?:p|div|li|tr|td|th|h[1-6])\s*>", " ", RegexOptions.IgnoreCase);
-            text = Regex.Replace(text, @"<[^>]+>", string.Empty, RegexOptions.Singleline);
+            text = BlockBreakTagRegex.Replace(text, " ");
+            text = BlockClosingTagRegex.Replace(text, " ");
+            text = HtmlTagRegex.Replace(text, string.Empty);
             text = HtmlDecodeRepeatedly(text);
             text = StripLiteralCDataMarkers(text);
 
@@ -443,7 +430,7 @@ namespace OneFinder
                 || elementName.Equals("td", StringComparison.OrdinalIgnoreCase)
                 || elementName.Equals("th", StringComparison.OrdinalIgnoreCase)
                 || elementName.Equals("br", StringComparison.OrdinalIgnoreCase)
-                || Regex.IsMatch(elementName, @"^h[1-6]$", RegexOptions.IgnoreCase);
+                || HeadingElementNameRegex.IsMatch(elementName);
         }
 
         private string StripLiteralCDataMarkers(string text)
@@ -452,7 +439,7 @@ namespace OneFinder
             do
             {
                 previous = text;
-                text = Regex.Replace(text, @"<!\[CDATA\[(.*?)\]\]>", "$1", RegexOptions.Singleline);
+                text = LiteralCDataRegex.Replace(text, "$1");
             }
             while (!string.Equals(previous, text, StringComparison.Ordinal));
 
@@ -479,7 +466,34 @@ namespace OneFinder
         private string NormalizeWhitespace(string text)
         {
             if (string.IsNullOrWhiteSpace(text)) return string.Empty;
-            return Regex.Replace(text, @"\s+", " ").Trim();
+            return WhitespaceRegex.Replace(text, " ").Trim();
+        }
+
+        private string? GetCurrentPageId()
+        {
+            if (_app == null) throw new ObjectDisposedException(nameof(OneNoteService));
+
+            string currentPageId = _app.Windows.CurrentWindow.CurrentPageId;
+            return string.IsNullOrEmpty(currentPageId) ? null : currentPageId;
+        }
+
+        private string? FindNotebookIdForPage(XDocument hierarchy, string pageId)
+        {
+            foreach (var notebook in hierarchy.Descendants(NS + "Notebook"))
+            {
+                string notebookId = notebook.Attribute("ID")?.Value ?? string.Empty;
+                if (string.IsNullOrEmpty(notebookId)) continue;
+
+                bool containsPage = notebook.Descendants(NS + "Page")
+                    .Any(page => string.Equals(page.Attribute("ID")?.Value, pageId, StringComparison.Ordinal));
+
+                if (containsPage)
+                {
+                    return notebookId;
+                }
+            }
+
+            return null;
         }
 
         /// <summary>

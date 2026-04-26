@@ -11,6 +11,11 @@
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
     <Platforms>x64</Platforms>
     <PlatformTarget>x64</PlatformTarget>
+    <!-- Publish size optimization:
+         Framework-dependent (no self-contained runtime, no single-file bundle)
+         keeps the install footprint to only the app DLL + EXE stub (~0.3 MB total).
+         The installer detects and requires the .NET 8 Desktop Runtime. -->
+    <PublishReadyToRun>false</PublishReadyToRun>
   </PropertyGroup>
 
   <!-- OneNote COM Interop — 直接引用 GAC 中的互操作程序集，避免 dotnet publish 不支持 COMReference -->
@@ -22,7 +27,6 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="ReaLTaiizor" Version="3.8.0.5" />
   </ItemGroup>
 
 </Project>

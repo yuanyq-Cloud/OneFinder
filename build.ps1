@@ -85,9 +85,8 @@ Write-Host ">>> [2/3] Publishing OneFinder (self-contained, win-x64, single-file
 dotnet publish $AppProject `
     --configuration $Configuration `
     --runtime win-x64 `
-    --self-contained true `
-    -p:PublishSingleFile=true `
-    -p:PublishTrimmed=false `
+    --self-contained false `
+    -p:PublishSingleFile=false `
     -p:DebugType=none `
     -p:DebugSymbols=false
 
@@ -98,7 +97,8 @@ if (-not (Test-Path $ExePath)) {
     Write-Error "Published EXE not found: $ExePath"
     exit 1
 }
-Write-Host "    EXE: $ExePath" -ForegroundColor Gray
+$ExeSizeMB = [math]::Round((Get-Item $ExePath).Length / 1MB, 1)
+Write-Host "    EXE: $ExePath ($ExeSizeMB MB)" -ForegroundColor Gray
 
 # Step 3: WiX MSI build
 Write-Host ""
@@ -117,4 +117,5 @@ if ($LASTEXITCODE -ne 0) { Write-Error "wix build failed"; exit 1 }
 
 Write-Host ""
 Write-Host ">>> Done! MSI:" -ForegroundColor Green
-Write-Host "    $OutputMsi" -ForegroundColor Yellow
+$MsiSizeMB = [math]::Round((Get-Item $OutputMsi).Length / 1MB, 1)
+Write-Host "    $OutputMsi ($MsiSizeMB MB)" -ForegroundColor Yellow

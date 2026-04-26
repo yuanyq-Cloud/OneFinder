@@ -12,6 +12,22 @@
     <MajorUpgrade DowngradeErrorMessage="A newer version is already installed." />
     <MediaTemplate EmbedCab="yes" />
 
+    <!--
+      Check for .NET 8 Desktop Runtime (x64).
+      OneFinder.exe is published as framework-dependent, so the runtime must be present.
+      The registry key is written by the .NET installer under HKLM.
+    -->
+    <Property Id="DOTNET8_DESKTOP_INSTALLED">
+      <RegistrySearch Id="SearchDotNet8Desktop"
+        Root="HKLM"
+        Key="SOFTWARE\dotnet\Setup\InstalledVersions\x64\sharedfx\Microsoft.WindowsDesktop.App"
+        Name="8.0.0"
+        Type="raw" />
+    </Property>
+    <Condition Message="OneFinder requires the .NET 8 Desktop Runtime (x64). Please download and install it from https://aka.ms/dotnet8-desktop-runtime-win-x64 and then run this installer again.">
+      <![CDATA[Installed OR DOTNET8_DESKTOP_INSTALLED]]>
+    </Condition>
+
     <Feature Id="Main" Title="OneFinder" Level="1">
       <ComponentGroupRef Id="AppFiles" />
       <ComponentGroupRef Id="AddinFiles" />
@@ -33,7 +49,7 @@
     <StandardDirectory Id="DesktopFolder" />
   </Fragment>
 
-  <!-- Main app EXE (.NET 8 self-contained single-file) -->
+  <!-- Main app files (.NET 8 framework-dependent publish output) -->
   <Fragment>
     <ComponentGroup Id="AppFiles" Directory="INSTALLFOLDER">
       <Component Id="MainExe" Guid="*">
@@ -41,8 +57,28 @@
               Source="$(var.PublishDir)OneFinder.exe"
               KeyPath="yes" />
       </Component>
+      <Component Id="MainDll" Guid="*">
+        <File Id="OneFinderDll"
+              Source="$(var.PublishDir)OneFinder.dll"
+              KeyPath="yes" />
+      </Component>
+      <Component Id="RuntimeConfig" Guid="*">
+        <File Id="OneFinderRuntimeConfig"
+              Source="$(var.PublishDir)OneFinder.runtimeconfig.json"
+              KeyPath="yes" />
+      </Component>
+      <Component Id="DepsJson" Guid="*">
+        <File Id="OneFinderDepsJson"
+              Source="$(var.PublishDir)OneFinder.deps.json"
+              KeyPath="yes" />
+      </Component>
+      <Component Id="OneNoteInterop" Guid="*">
+        <File Id="OneNoteInteropDll"
+              Source="$(var.PublishDir)Microsoft.Office.Interop.OneNote.dll"
+              KeyPath="yes" />
+      </Component>
     </ComponentGroup>
-  </Fragment>
+  </Fragment>  </Fragment>
 
   <!-- OneNote addin DLL (.NET Framework 4.8, loaded by OneNote via mscoree.dll) -->
   <Fragment>

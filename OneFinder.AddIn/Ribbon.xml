@@ -1,0 +1,21 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<customUI xmlns="http://schemas.microsoft.com/office/2009/07/customui"
+          onLoad="RibbonLoaded">
+  <ribbon>
+    <tabs>
+      <tab idMso="TabHome">
+        <group id="OneFinder_Group"
+               label="OneFinder"
+               insertAfterMso="GroupEditing">
+          <button id="OneFinder_SearchButton"
+                  label="全文搜索"
+                  screentip="打开 OneFinder 全文搜索"
+                  supertip="在所有 OneNote 笔记本中快速全文搜索内容"
+                  size="large"
+                  imageMso="FindDialog"
+                  onAction="OnSearchClick" />
+        </group>
+      </tab>
+    </tabs>
+  </ribbon>
+</customUI>

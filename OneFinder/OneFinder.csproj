@@ -13,17 +13,13 @@
     <PlatformTarget>x64</PlatformTarget>
   </PropertyGroup>
 
-  <!-- OneNote COM Interop -->
+  <!-- OneNote COM Interop — 直接引用 GAC 中的互操作程序集，避免 dotnet publish 不支持 COMReference -->
   <ItemGroup>
-    <COMReference Include="Microsoft.Office.Interop.OneNote">
-      <Guid>{0EA692EE-BB50-4E3C-AEF0-356D91732725}</Guid>
-      <VersionMajor>1</VersionMajor>
-      <VersionMinor>1</VersionMinor>
-      <Lcid>0</Lcid>
-      <WrapperTool>tlbimp</WrapperTool>
-      <Isolated>False</Isolated>
-      <EmbedInteropTypes>True</EmbedInteropTypes>
-    </COMReference>
+    <Reference Include="Microsoft.Office.Interop.OneNote">
+      <HintPath>C:\Windows\assembly\GAC_MSIL\Microsoft.Office.Interop.OneNote\15.0.0.0__71e9bce111e9429c\Microsoft.Office.Interop.OneNote.dll</HintPath>
+      <EmbedInteropTypes>False</EmbedInteropTypes>
+      <Private>true</Private>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="ReaLTaiizor" Version="3.8.0.5" />

@@ -1,9 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-    WiX v4 / v5 Package 定义
-    使用方式：
-        wix build Package.wxs -d PublishDir=<发布目录路径>\ -o OneFinderSetup.msi -arch x64
--->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
 
   <Package
@@ -13,50 +8,34 @@
     UpgradeCode="3F8A7B9C-1D2E-4F56-8A9B-0C1D2E3F4A5B"
     Scope="perMachine">
 
-    <SummaryInformation Description="OneNote 全文搜索工具" />
-
-    <!-- 安装更新时自动卸载旧版本 -->
-    <MajorUpgrade DowngradeErrorMessage="已安装了更新版本，无法降级安装。" />
-
-    <!-- 将所有文件打包进 MSI（无需外部 .cab） -->
+    <SummaryInformation Description="OneFinder - OneNote full-text search" />
+    <MajorUpgrade DowngradeErrorMessage="A newer version is already installed." />
     <MediaTemplate EmbedCab="yes" />
 
     <Feature Id="Main" Title="OneFinder" Level="1">
       <ComponentGroupRef Id="AppFiles" />
+      <ComponentGroupRef Id="AddinFiles" />
+      <ComponentGroupRef Id="ComRegistry" />
       <ComponentRef Id="StartMenuShortcutComp" />
       <ComponentRef Id="DesktopShortcutComp" />
     </Feature>
 
   </Package>
 
-  <!-- ── 目录结构 ─────────────────────────────────────── -->
+  <!-- Directory layout (WiX v5 style using StandardDirectory) -->
   <Fragment>
-    <Directory Id="TARGETDIR" Name="SourceDir">
-
-      <!-- 程序安装目录：C:\Program Files\OneFinder\ -->
-      <Directory Id="ProgramFiles64Folder">
-        <Directory Id="INSTALLFOLDER" Name="OneFinder" />
-      </Directory>
-
-      <!-- 开始菜单 -->
-      <Directory Id="ProgramMenuFolder">
-        <Directory Id="AppMenuFolder" Name="OneFinder" />
-      </Directory>
-
-      <!-- 桌面 -->
-      <Directory Id="DesktopFolder" />
-
-    </Directory>
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="OneFinder" />
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="AppMenuFolder" Name="OneFinder" />
+    </StandardDirectory>
+    <StandardDirectory Id="DesktopFolder" />
   </Fragment>
 
-  <!-- ── 应用程序文件 ──────────────────────────────────── -->
+  <!-- Main app EXE (.NET 8 self-contained single-file) -->
   <Fragment>
     <ComponentGroup Id="AppFiles" Directory="INSTALLFOLDER">
-      <!--
-          PublishDir 变量由构建脚本传入，例如：
-          wix build ... -d PublishDir=D:\...\publish\
-          单文件发布时此处只有一个 .exe
-      -->
       <Component Id="MainExe" Guid="*">
         <File Id="OneFinderExe"
               Source="$(var.PublishDir)OneFinder.exe"
@@ -65,44 +44,131 @@
     </ComponentGroup>
   </Fragment>
 
-  <!-- ── 开始菜单快捷方式 ──────────────────────────────── -->
+  <!-- OneNote addin DLL (.NET Framework 4.8, loaded by OneNote via mscoree.dll) -->
+  <Fragment>
+    <ComponentGroup Id="AddinFiles" Directory="INSTALLFOLDER">
+      <Component Id="AddinDll" Guid="*">
+        <File Id="OneFinderAddinDll"
+              Source="$(var.AddinDir)OneFinder.AddIn.dll"
+              KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+
+  <!--
+    COM registration + OneNote addin activation
+    Mirrors: https://github.com/stevencohn/OneMore/blob/main/register-onemore.reg
+
+    CLSID  : {6B29FC40-CA47-1067-B31D-00DD010662DA}
+    ProgID : OneFinder.AddIn
+    OneNote loads the addin at startup via LoadBehavior=3
+  -->
+  <Fragment>
+    <ComponentGroup Id="ComRegistry" Directory="INSTALLFOLDER">
+
+      <Component Id="Reg_ProgId" Guid="*">
+        <RegistryKey Root="HKCR" Key="OneFinder.AddIn">
+          <RegistryValue Type="string" Value="OneFinder.AddIn" />
+        </RegistryKey>
+        <RegistryKey Root="HKCR" Key="OneFinder.AddIn\CLSID">
+          <RegistryValue Type="string" Value="{6B29FC40-CA47-1067-B31D-00DD010662DA}" />
+        </RegistryKey>
+        <RegistryKey Root="HKCR" Key="OneFinder.AddIn\CurVer">
+          <RegistryValue Type="string" Value="OneFinder.AddIn.1" />
+        </RegistryKey>
+        <RegistryKey Root="HKCR" Key="OneFinder.AddIn.1">
+          <RegistryValue Type="string" Value="OneFinder.AddIn" />
+        </RegistryKey>
+        <RegistryKey Root="HKCR" Key="OneFinder.AddIn.1\CLSID">
+          <RegistryValue Type="string" Value="{6B29FC40-CA47-1067-B31D-00DD010662DA}" />
+        </RegistryKey>
+      </Component>
+
+      <Component Id="Reg_AppId" Guid="*">
+        <RegistryKey Root="HKCR" Key="AppID\{6B29FC40-CA47-1067-B31D-00DD010662DA}">
+          <RegistryValue Type="string" Value="" />
+          <RegistryValue Name="DllSurrogate" Type="string" Value="" />
+        </RegistryKey>
+      </Component>
+
+      <Component Id="Reg_Clsid" Guid="*">
+        <!-- CLSID entry -->
+        <RegistryKey Root="HKCR" Key="CLSID\{6B29FC40-CA47-1067-B31D-00DD010662DA}">
+          <RegistryValue Type="string" Value="OneFinder.AddIn" />
+          <RegistryValue Name="AppID" Type="string" Value="{6B29FC40-CA47-1067-B31D-00DD010662DA}" />
+        </RegistryKey>
+        <!-- InprocServer32: CLR 4.0 loads the .NET 4.8 assembly via mscoree.dll -->
+        <RegistryKey Root="HKCR" Key="CLSID\{6B29FC40-CA47-1067-B31D-00DD010662DA}\InprocServer32">
+          <RegistryValue Type="string"  Value="mscoree.dll" />
+          <RegistryValue Name="ThreadingModel" Type="string" Value="Both" />
+          <RegistryValue Name="Class"          Type="string" Value="OneFinder.AddIn.AddIn" />
+          <RegistryValue Name="Assembly"       Type="string" Value="OneFinder.AddIn, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null" />
+          <RegistryValue Name="RuntimeVersion" Type="string" Value="v4.0.30319" />
+          <RegistryValue Name="CodeBase"       Type="string" Value="file:///[INSTALLFOLDER]OneFinder.AddIn.dll" />
+        </RegistryKey>
+        <RegistryKey Root="HKCR" Key="CLSID\{6B29FC40-CA47-1067-B31D-00DD010662DA}\InprocServer32\1.0.0.0">
+          <RegistryValue Name="Class"          Type="string" Value="OneFinder.AddIn.AddIn" />
+          <RegistryValue Name="Assembly"       Type="string" Value="OneFinder.AddIn, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null" />
+          <RegistryValue Name="RuntimeVersion" Type="string" Value="v4.0.30319" />
+          <RegistryValue Name="CodeBase"       Type="string" Value="file:///[INSTALLFOLDER]OneFinder.AddIn.dll" />
+        </RegistryKey>
+        <RegistryKey Root="HKCR" Key="CLSID\{6B29FC40-CA47-1067-B31D-00DD010662DA}\ProgID">
+          <RegistryValue Type="string" Value="OneFinder.AddIn" />
+        </RegistryKey>
+        <RegistryKey Root="HKCR" Key="CLSID\{6B29FC40-CA47-1067-B31D-00DD010662DA}\VersionIndependentProgID">
+          <RegistryValue Type="string" Value="OneFinder.AddIn" />
+        </RegistryKey>
+        <RegistryKey Root="HKCR" Key="CLSID\{6B29FC40-CA47-1067-B31D-00DD010662DA}\Programmable">
+          <RegistryValue Type="string" Value="" />
+        </RegistryKey>
+        <!-- .NET component category {62C8FE65-4EBB-45E7-B440-6E39B2CDBF29} -->
+        <RegistryKey Root="HKCR" Key="CLSID\{6B29FC40-CA47-1067-B31D-00DD010662DA}\Implemented Categories\{62C8FE65-4EBB-45E7-B440-6E39B2CDBF29}">
+          <RegistryValue Type="string" Value="" />
+        </RegistryKey>
+      </Component>
+
+      <!-- Tell OneNote to load this addin at startup (LoadBehavior=3) -->
+      <Component Id="Reg_OneNoteAddin" Guid="*">
+        <RegistryKey Root="HKCU" Key="SOFTWARE\Microsoft\Office\OneNote\AddIns\OneFinder.AddIn">
+          <RegistryValue Name="LoadBehavior"    Type="integer" Value="3" KeyPath="yes" />
+          <RegistryValue Name="FriendlyName"    Type="string"  Value="OneFinder" />
+          <RegistryValue Name="Description"     Type="string"  Value="OneFinder - OneNote full-text search" />
+          <RegistryValue Name="CommandLineSafe" Type="integer" Value="0" />
+        </RegistryKey>
+      </Component>
+
+    </ComponentGroup>
+  </Fragment>
+
+  <!-- Start menu shortcut -->
   <Fragment>
     <DirectoryRef Id="AppMenuFolder">
       <Component Id="StartMenuShortcutComp" Guid="*">
         <Shortcut Id="StartMenuLink"
                   Name="OneFinder"
-                  Description="OneNote 全文搜索"
+                  Description="OneNote full-text search"
                   Target="[INSTALLFOLDER]OneFinder.exe"
                   WorkingDirectory="INSTALLFOLDER" />
-        <!-- 卸载时清理开始菜单文件夹 -->
-        <RemoveFolder Id="RemoveAppMenuFolder"
-                      Directory="AppMenuFolder"
-                      On="uninstall" />
-        <RegistryValue Root="HKCU"
-                       Key="Software\OneFinder"
-                       Name="StartMenuInstalled"
-                       Type="integer" Value="1"
-                       KeyPath="yes" />
+        <RemoveFolder Id="RemoveAppMenuFolder" Directory="AppMenuFolder" On="uninstall" />
+        <RegistryValue Root="HKCU" Key="Software\OneFinder"
+                       Name="StartMenuInstalled" Type="integer" Value="1" KeyPath="yes" />
       </Component>
     </DirectoryRef>
   </Fragment>
 
-  <!-- ── 桌面快捷方式 ──────────────────────────────────── -->
+  <!-- Desktop shortcut -->
   <Fragment>
-    <DirectoryRef Id="DesktopFolder">
+    <StandardDirectory Id="DesktopFolder">
       <Component Id="DesktopShortcutComp" Guid="*">
         <Shortcut Id="DesktopLink"
                   Name="OneFinder"
-                  Description="OneNote 全文搜索"
+                  Description="OneNote full-text search"
                   Target="[INSTALLFOLDER]OneFinder.exe"
                   WorkingDirectory="INSTALLFOLDER" />
-        <RegistryValue Root="HKCU"
-                       Key="Software\OneFinder"
-                       Name="DesktopInstalled"
-                       Type="integer" Value="1"
-                       KeyPath="yes" />
+        <RegistryValue Root="HKCU" Key="Software\OneFinder"
+                       Name="DesktopInstalled" Type="integer" Value="1" KeyPath="yes" />
       </Component>
-    </DirectoryRef>
+    </StandardDirectory>
   </Fragment>
 
 </Wix>

@@ -1,3 +1,8 @@
-OneFinder/obj
-OneFinder/bin
+OneFinder/obj/
+OneFinder/bin/
+OneFinder.AddIn/obj/
+OneFinder.AddIn/bin/
+installer/*.msi
+installer/*.wixpdb
+installer/*.wixobj
 .vs/

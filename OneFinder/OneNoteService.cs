@@ -1,5 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Net;
+using System.Text;
+using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Microsoft.Office.Interop.OneNote;
 using Application = Microsoft.Office.Interop.OneNote.Application;
@@ -151,18 +154,21 @@ namespace OneFinder
         /// <param name="query">搜索关键词</param>
         /// <param name="currentNotebookOnly">是否仅搜索当前笔记本</param>
         /// <param name="progress">进度回调</param>
-        public List<PageResult> Search(string query, bool currentNotebookOnly = false, Action<string>? progress = null)
+        public List<PageResult> Search(string query, bool currentNotebookOnly = false,
+            Action<string>? progress = null, CancellationToken cancellationToken = default)
         {
             if (_app == null) throw new ObjectDisposedException(nameof(OneNoteService));
             if (string.IsNullOrWhiteSpace(query)) return new List<PageResult>();
 
             var results = new List<PageResult>();
-            string queryLower = query.ToLowerInvariant();
+            string normalizedQuery = NormalizeWhitespace(query);
+            string queryLower = normalizedQuery.ToLowerInvariant();
 
             // 如果需要仅搜索当前笔记本，获取当前笔记本ID
             string? currentNotebookId = null;
             if (currentNotebookOnly)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 currentNotebookId = GetCurrentNotebookId();
                 if (string.IsNullOrEmpty(currentNotebookId))
                 {
@@ -177,6 +183,8 @@ namespace OneFinder
 
             foreach (var notebook in hierarchy.Descendants(NS + "Notebook"))
             {
+                cancellationToken.ThrowIfCancellationRequested();
+
                 string nbId = notebook.Attribute("ID")?.Value ?? string.Empty;
                 string nbName = notebook.Attribute("name")?.Value ?? "(未命名笔记本)";
 
@@ -190,6 +198,8 @@ namespace OneFinder
 
                 foreach (var section in notebook.Descendants(NS + "Section"))
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
+
                     // 跳过受密码保护或已加密的节
                     if (section.Attribute("locked")?.Value == "true") continue;
                     if (section.Attribute("isInRecycleBin")?.Value == "true") continue;
@@ -198,6 +208,8 @@ namespace OneFinder
 
                     foreach (var page in section.Elements(NS + "Page"))
                     {
+                        cancellationToken.ThrowIfCancellationRequested();
+
                         string pageId   = page.Attribute("ID")?.Value ?? string.Empty;
                         string pageName = page.Attribute("name")?.Value ?? "(未命名页面)";
 
@@ -214,7 +226,7 @@ namespace OneFinder
                             var hitObjectIds = new List<string>();
 
                             // 提取所有 T 元素（文本节点）
-                            ExtractTextMatches(pageDoc, queryLower, query.Length, snippets, hitObjectIds);
+                            ExtractTextMatches(pageDoc, queryLower, normalizedQuery.Length, snippets, hitObjectIds);
 
                             if (snippets.Count > 0)
                             {
@@ -246,23 +258,19 @@ namespace OneFinder
         private void ExtractTextMatches(XDocument pageDoc, string queryLower, int queryLength,
             List<string> snippets, List<string> hitObjectIds)
         {
-            // 在 OneNote XML 中，文本存储在 <T> 元素中
-            // <OE> 是 Outline Element（大纲元素）
             foreach (var textElement in pageDoc.Descendants(NS + "T"))
             {
-                string text = textElement.Value;
+                string text = BuildSearchableTextMirror(textElement);
                 if (string.IsNullOrWhiteSpace(text)) continue;
 
                 string textLower = text.ToLowerInvariant();
-                int index = textLower.IndexOf(queryLower);
+                int index = textLower.IndexOf(queryLower, StringComparison.Ordinal);
 
                 if (index >= 0)
                 {
-                    // 找到匹配，提取上下文片段
                     string snippet = ExtractSnippet(text, index, queryLength);
                     snippets.Add(snippet);
 
-                    // 尝试获取父 OE 元素的 objectID（用于页内导航）
                     var oeElement = textElement.Ancestors(NS + "OE").FirstOrDefault();
                     if (oeElement != null)
                     {
@@ -271,7 +279,6 @@ namespace OneFinder
                             hitObjectIds.Add(objectId);
                     }
 
-                    // 如果已经找到足够多的片段，可以提前停止（避免结果过多）
                     if (snippets.Count >= 5) break;
                 }
             }
@@ -283,7 +290,6 @@ namespace OneFinder
         private string ExtractSnippet(string text, int matchIndex, int matchLength, 
             int contextLength = 30)
         {
-            // 计算片段的起始和结束位置（在原始文本上）
             int start = Math.Max(0, matchIndex - contextLength);
             int end = Math.Min(text.Length, matchIndex + matchLength + contextLength);
 
@@ -303,63 +309,177 @@ namespace OneFinder
                          snippet.Substring(highlightEnd);
             }
 
-            // 最后一步：清洗HTML但保留[关键词]标记
-            snippet = CleanHtmlContentKeepBrackets(prefix + snippet + suffix);
-
-            return snippet;
+            return NormalizeWhitespace(prefix + snippet + suffix);
         }
 
         /// <summary>
-        /// 清洗HTML标签和实体，但保留[关键词]标记
+        /// 为单个文本节点建立纯文本镜像：逐个子节点提取、清理 CDATA/HTML，再拼接搜索。
         /// </summary>
-        private string CleanHtmlContentKeepBrackets(string text)
+        private string BuildSearchableTextMirror(XElement textElement)
         {
-            if (string.IsNullOrWhiteSpace(text)) return text;
+            var builder = new StringBuilder();
+            foreach (var node in textElement.Nodes())
+            {
+                AppendNodePlainText(node, builder);
+            }
 
-            // 临时替换[关键词]标记，避免被清洗破坏
-            string placeholder = "\u0001KEYWORD\u0002";  // 使用不可见字符作为占位符
-            text = text.Replace("[", placeholder + "[");
-            text = text.Replace("]", "]" + placeholder);
+            if (builder.Length == 0)
+            {
+                AppendPlainTextFragment(textElement.Value, builder);
+            }
 
-            // 用更贪婪和强壮的正则移除HTML闭合标签对比如 <span ...> ... </span> 
-            // 有些时候 OneNote 原始 XML 的 T 标签内包装的 CDATA 被当作纯字符串，
-            // 里面有不成对或者奇葩结构的碎片，这里做个大清洗。
+            return NormalizeWhitespace(builder.ToString());
+        }
 
-            // 移除完整的标签
-            text = System.Text.RegularExpressions.Regex.Replace(text, @"<([A-Za-z][A-Za-z0-9]*)\b[^>]*>(.*?)</\1>", "$2", System.Text.RegularExpressions.RegexOptions.Singleline | System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        private void AppendNodePlainText(XNode node, StringBuilder builder)
+        {
+            switch (node)
+            {
+                case XCData cdata:
+                    AppendPlainTextFragment(cdata.Value, builder);
+                    break;
+                case XText text:
+                    AppendPlainTextFragment(text.Value, builder);
+                    break;
+                case XElement element:
+                    foreach (var child in element.Nodes())
+                    {
+                        AppendNodePlainText(child, builder);
+                    }
+                    break;
+            }
+        }
 
-            // 移除所有HTML标签（包括属性）
-            // 匹配 <xxx> 或 </xxx> 或 <xxx attr="value"> 等，更强壮地处理跨行和引号内的>
-            text = System.Text.RegularExpressions.Regex.Replace(text, @"<[^>]*>", "");
+        private void AppendPlainTextFragment(string fragment, StringBuilder builder)
+        {
+            string plainText = CleanFragmentToPlainText(fragment);
+            if (string.IsNullOrWhiteSpace(plainText)) return;
 
-            // 下方这段处理残破的不带 < > 的属性值碎片
-            // 某些情况下，OneNote的XML会残留 lang=en-US 等孤立属性，也一并清理
-            text = System.Text.RegularExpressions.Regex.Replace(text, @"\b(?:lang|style|class|id|dir|align|title|contenteditable|color|face|size|data-[a-zA-Z0-9\-]+)\s*=\s*""[^""]*""", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-            text = System.Text.RegularExpressions.Regex.Replace(text, @"\b(?:lang|style|class|id|dir|align|title|contenteditable|color|face|size|data-[a-zA-Z0-9\-]+)\s*=\s*'[^']*'", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-            text = System.Text.RegularExpressions.Regex.Replace(text, @"\b(?:lang|style|class|id|dir|align|title|contenteditable|color|face|size|data-[a-zA-Z0-9\-]+)\s*=\s*[\w\-]+", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (builder.Length > 0 && !char.IsWhiteSpace(builder[builder.Length - 1]) && !char.IsWhiteSpace(plainText[0]))
+            {
+                builder.Append(' ');
+            }
 
-            // 移除残留的孤立尖括号
-            text = System.Text.RegularExpressions.Regex.Replace(text, @"<|>", "");
+            builder.Append(plainText);
+        }
 
-            // 替换常见HTML实体
-            text = text.Replace("&nbsp;", " ");
-            text = text.Replace("&lt;", "<");
-            text = text.Replace("&gt;", ">");
-            text = text.Replace("&amp;", "&");
-            text = text.Replace("&quot;", "\"");
-            text = text.Replace("&#39;", "'");
-            text = text.Replace("&apos;", "'");
+        private string CleanFragmentToPlainText(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return string.Empty;
 
-            // 移除其他HTML实体 &#xxx; 或 &#xHHH;
-            text = System.Text.RegularExpressions.Regex.Replace(text, @"&#?[a-zA-Z0-9]+;", "");
+            text = StripLiteralCDataMarkers(text);
+            text = HtmlDecodeRepeatedly(text);
 
-            // 移除多余空白
-            text = System.Text.RegularExpressions.Regex.Replace(text, @"\s+", " ");
+            string parsedText = TryConvertMarkupToPlainText(text);
+            if (!string.IsNullOrEmpty(parsedText))
+            {
+                return NormalizeWhitespace(parsedText);
+            }
 
-            // 恢复[关键词]标记
-            text = text.Replace(placeholder, "");
+            text = Regex.Replace(text, @"<(?:br|hr)\s*/?>", " ", RegexOptions.IgnoreCase);
+            text = Regex.Replace(text, @"</(?:p|div|li|tr|td|th|h[1-6])\s*>", " ", RegexOptions.IgnoreCase);
+            text = Regex.Replace(text, @"<[^>]+>", string.Empty, RegexOptions.Singleline);
+            text = HtmlDecodeRepeatedly(text);
+            text = StripLiteralCDataMarkers(text);
 
-            return text.Trim();
+            return NormalizeWhitespace(text);
+        }
+
+        private string TryConvertMarkupToPlainText(string text)
+        {
+            if (text.IndexOf('<') < 0 || text.IndexOf('>') < 0) return string.Empty;
+
+            try
+            {
+                var root = XElement.Parse($"<root>{text}</root>", LoadOptions.PreserveWhitespace);
+                var builder = new StringBuilder();
+                AppendElementPlainText(root, builder);
+                return builder.ToString();
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private void AppendElementPlainText(XElement element, StringBuilder builder)
+        {
+            bool isBlockElement = IsBlockLikeElement(element.Name.LocalName);
+            if (isBlockElement && builder.Length > 0 && !char.IsWhiteSpace(builder[builder.Length - 1]))
+            {
+                builder.Append(' ');
+            }
+
+            foreach (var node in element.Nodes())
+            {
+                switch (node)
+                {
+                    case XCData cdataNode:
+                        AppendPlainTextFragment(cdataNode.Value, builder);
+                        break;
+                    case XText textNode:
+                        builder.Append(textNode.Value);
+                        break;
+                    case XElement childElement:
+                        AppendElementPlainText(childElement, builder);
+                        break;
+                }
+            }
+
+            if ((isBlockElement || string.Equals(element.Name.LocalName, "br", StringComparison.OrdinalIgnoreCase))
+                && builder.Length > 0
+                && !char.IsWhiteSpace(builder[builder.Length - 1]))
+            {
+                builder.Append(' ');
+            }
+        }
+
+        private bool IsBlockLikeElement(string elementName)
+        {
+            return elementName.Equals("p", StringComparison.OrdinalIgnoreCase)
+                || elementName.Equals("div", StringComparison.OrdinalIgnoreCase)
+                || elementName.Equals("li", StringComparison.OrdinalIgnoreCase)
+                || elementName.Equals("tr", StringComparison.OrdinalIgnoreCase)
+                || elementName.Equals("td", StringComparison.OrdinalIgnoreCase)
+                || elementName.Equals("th", StringComparison.OrdinalIgnoreCase)
+                || elementName.Equals("br", StringComparison.OrdinalIgnoreCase)
+                || Regex.IsMatch(elementName, @"^h[1-6]$", RegexOptions.IgnoreCase);
+        }
+
+        private string StripLiteralCDataMarkers(string text)
+        {
+            string previous;
+            do
+            {
+                previous = text;
+                text = Regex.Replace(text, @"<!\[CDATA\[(.*?)\]\]>", "$1", RegexOptions.Singleline);
+            }
+            while (!string.Equals(previous, text, StringComparison.Ordinal));
+
+            return text.Replace("<![CDATA[", string.Empty)
+                       .Replace("]]>", string.Empty);
+        }
+
+        private string HtmlDecodeRepeatedly(string text)
+        {
+            for (int i = 0; i < 3; i++)
+            {
+                string decoded = WebUtility.HtmlDecode(text);
+                if (string.Equals(decoded, text, StringComparison.Ordinal))
+                {
+                    break;
+                }
+
+                text = decoded;
+            }
+
+            return text;
+        }
+
+        private string NormalizeWhitespace(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return string.Empty;
+            return Regex.Replace(text, @"\s+", " ").Trim();
         }
 
         /// <summary>

@@ -46,6 +46,7 @@ namespace OneFinder
 
         private List<MatchResult> _currentResults = new();
         private CancellationTokenSource? _cts;
+        private int _searchVersion;
 
         public MainForm()
         {
@@ -292,15 +293,16 @@ namespace OneFinder
             if (string.IsNullOrEmpty(query)) return;
 
             _cts?.Cancel();
+            _cts?.Dispose();
             _cts = new CancellationTokenSource();
             var token = _cts.Token;
+            int searchVersion = Interlocked.Increment(ref _searchVersion);
             bool currentNotebookOnly = _currentNotebookOnly.Checked;
 
             _resultList.Items.Clear();
             _currentResults.Clear();
-            _searchButton.Enabled = false;
             _progress.Visible = true;
-            SetStatus("正在搜索…");
+            SetStatus("正在搜索…（再次点击可中断并重新搜索）");
 
             Task.Run(() =>
             {
@@ -311,19 +313,34 @@ namespace OneFinder
                     {
                         if (!token.IsCancellationRequested)
                             BeginInvoke(() => SetStatus(msg));
+                    }, token);
+
+                    if (token.IsCancellationRequested || searchVersion != _searchVersion) return;
+
+                    BeginInvoke(() =>
+                    {
+                        if (token.IsCancellationRequested || searchVersion != _searchVersion) return;
+                        ShowResults(results, query);
                     });
+                }
+                catch (OperationCanceledException)
+                {
+                    if (searchVersion != _searchVersion) return;
 
-                    if (token.IsCancellationRequested) return;
-
-                    BeginInvoke(() => ShowResults(results, query));
+                    BeginInvoke(() =>
+                    {
+                        if (searchVersion != _searchVersion) return;
+                        SetStatus("搜索已取消");
+                        _progress.Visible = false;
+                    });
                 }
                 catch (Exception ex)
                 {
-                    if (!token.IsCancellationRequested)
+                    if (!token.IsCancellationRequested && searchVersion == _searchVersion)
                         BeginInvoke(() =>
                         {
+                            if (searchVersion != _searchVersion) return;
                             SetStatus($"错误：{ex.Message}");
-                            _searchButton.Enabled = true;
                             _progress.Visible = false;
                         });
                 }
@@ -365,7 +382,6 @@ namespace OneFinder
                 ? $"未找到包含「{query}」的页面"
                 : $"找到 {results.Count} 个页面，共 {totalMatches} 处匹配 — 双击打开");
 
-            _searchButton.Enabled = true;
             _progress.Visible = false;
         }
 

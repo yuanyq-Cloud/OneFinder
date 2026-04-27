@@ -23,15 +23,10 @@ namespace OneFinder.AddIn
 
         private IRibbonUI _ribbon;
 
-        // ------------------------------------------------------------------ //
-        //  Helpers - all wrapped in try/catch, nothing runs at class load time
-        // ------------------------------------------------------------------ //
-
         private static string GetInstallDir()
         {
             try
             {
-                // Prefer CodeBase (the real on-disk path even if shadow-copied)
                 var codeBase = Assembly.GetExecutingAssembly().CodeBase;
                 if (!string.IsNullOrEmpty(codeBase))
                 {
@@ -44,14 +39,12 @@ namespace OneFinder.AddIn
 
             try
             {
-                // Fallback: Location
                 var loc = Assembly.GetExecutingAssembly().Location;
                 if (!string.IsNullOrEmpty(loc))
                     return Path.GetDirectoryName(loc);
             }
             catch { }
 
-            // Last resort: same directory as this process
             return AppDomain.CurrentDomain.BaseDirectory;
         }
 
@@ -66,10 +59,6 @@ namespace OneFinder.AddIn
             }
             catch { }
         }
-
-        // ------------------------------------------------------------------ //
-        //  IDTExtensibility2
-        // ------------------------------------------------------------------ //
 
         public void OnConnection(object Application, ext_ConnectMode ConnectMode,
             object AddInInst, ref Array custom)
@@ -94,7 +83,6 @@ namespace OneFinder.AddIn
             Log("OnBeginShutdown");
             try
             {
-                // 通知正在运行的 OneFinder 实例 OneNote 即将关闭
                 if (EventWaitHandle.TryOpenExisting(
                         "Local\\OneFinder-OneNoteShutdown", out var handle))
                 {
@@ -107,10 +95,6 @@ namespace OneFinder.AddIn
                 Log(string.Format("OnBeginShutdown exception: {0}", ex.Message));
             }
         }
-
-        // ------------------------------------------------------------------ //
-        //  IRibbonExtensibility
-        // ------------------------------------------------------------------ //
 
         public string GetCustomUI(string RibbonID)
         {
@@ -140,10 +124,6 @@ namespace OneFinder.AddIn
             }
         }
 
-        // ------------------------------------------------------------------ //
-        //  Ribbon callbacks
-        // ------------------------------------------------------------------ //
-
         public void RibbonLoaded(IRibbonUI ribbon)
         {
             _ribbon = ribbon;
@@ -171,12 +151,11 @@ namespace OneFinder.AddIn
                 if (hwnd != IntPtr.Zero)
                 {
                     Log("already running - bring to front");
-                    NativeMethods.ShowWindow(hwnd, 9); // SW_RESTORE
+                    NativeMethods.ShowWindow(hwnd, 9);
                     NativeMethods.SetForegroundWindow(hwnd);
                 }
                 else
                 {
-                    // 进程存在但无主窗口（可能卡死或正在退出），先终止再重启
                     foreach (var stale in procs)
                     {
                         try { stale.Kill(); } catch { }

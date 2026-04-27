@@ -14,7 +14,6 @@ namespace OneFinder
             using var mutex = new Mutex(initiallyOwned: true, MutexName, out bool createdNew);
             if (!createdNew)
             {
-                // 已有实例在运行，直接退出
                 return;
             }
 

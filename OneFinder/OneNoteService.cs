@@ -22,7 +22,7 @@ namespace OneFinder
         public string PageId       { get; set; } = string.Empty;
 
         /// <summary>
-        /// 搜索词命中的片段列表（每个片段包含前后文）
+        /// 命中片段列表（包含前后文）
         /// </summary>
         public List<string> Snippets { get; set; } = new();
 
@@ -34,15 +34,11 @@ namespace OneFinder
         public override string ToString() =>
             $"{NotebookName}  ›  {SectionName}  ›  {PageName}";
 
-        /// <summary>
-        /// 获取格式化的搜索结果摘要（包含片段预览）
-        /// </summary>
         public string GetDisplayText()
         {
             string basePath = ToString();
             if (Snippets.Count == 0) return basePath;
 
-            // 显示第一个片段
             string firstSnippet = Snippets[0];
             if (Snippets.Count > 1)
                 return $"{basePath}\n    {firstSnippet} … (+{Snippets.Count - 1} 处匹配)";
@@ -61,24 +57,9 @@ namespace OneFinder
         public string PageName     { get; set; } = string.Empty;
         public string PageId       { get; set; } = string.Empty;
 
-        /// <summary>
-        /// 匹配的文本片段
-        /// </summary>
         public string Snippet { get; set; } = string.Empty;
-
-        /// <summary>
-        /// 匹配对象的 ID（用于页内导航）
-        /// </summary>
         public string? ObjectId { get; set; }
-
-        /// <summary>
-        /// 该页面中的匹配序号（1-based）
-        /// </summary>
         public int MatchIndex { get; set; }
-
-        /// <summary>
-        /// 该页面的总匹配数
-        /// </summary>
         public int TotalMatches { get; set; }
 
         public string GetPagePath() =>
@@ -89,14 +70,13 @@ namespace OneFinder
     }
 
     /// <summary>
-    /// 封装对 OneNote COM API 的访问，通过 XML 全文搜索页面。
+    /// 封装对 OneNote COM API 的访问，通过 XML 实现全文搜索
     /// </summary>
     public class OneNoteService : IDisposable
     {
         private Application? _app;
         private bool _disposed;
 
-        // OneNote XML 命名空间（版本号为 2013+）
         private static readonly XNamespace NS = "http://schemas.microsoft.com/office/onenote/2013/onenote";
         private static readonly Regex BlockBreakTagRegex = new(@"<(?:br|hr)\s*/?>", RegexOptions.IgnoreCase | RegexOptions.Compiled);
         private static readonly Regex BlockClosingTagRegex = new(@"</(?:p|div|li|tr|td|th|h[1-6])\s*>", RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -107,12 +87,11 @@ namespace OneFinder
 
         public OneNoteService()
         {
-            // 如果 OneNote 已经打开则附加，否则启动一个新实例
             _app = new Application();
         }
 
         /// <summary>
-        /// 获取当前打开的笔记本ID
+        /// 获取当前打开的笔记本 ID
         /// </summary>
         public string? GetCurrentNotebookId()
         {
@@ -129,19 +108,13 @@ namespace OneFinder
             }
             catch
             {
-                // 如果无法获取当前笔记本，返回null
+                return null;
             }
-
-            return null;
         }
 
         /// <summary>
-        /// 遍历所有笔记本 → 节 → 页，在页面 XML 中做大小写不敏感的全文匹配。
+        /// 执行页面搜索（XML 级文本匹配）
         /// </summary>
-        /// <param name="query">搜索关键词</param>
-        /// <param name="currentNotebookOnly">是否仅搜索当前笔记本</param>
-        /// <param name="fastSearch">是否启用快速搜索（使用快速路径和粗过滤）</param>
-        /// <param name="progress">进度回调</param>
         public List<PageResult> Search(string query, bool currentNotebookOnly = false,
             bool fastSearch = false, Action<string>? progress = null,
             CancellationToken cancellationToken = default)
@@ -152,11 +125,9 @@ namespace OneFinder
             var results = new List<PageResult>();
             string normalizedQuery = NormalizeWhitespace(query);
 
-            // 获取所有笔记本的层次结构 XML
             _app.GetHierarchy(null, HierarchyScope.hsPages, out string hierarchyXml);
             var hierarchy = XDocument.Parse(hierarchyXml);
 
-            // 如果需要仅搜索当前笔记本，直接复用已获取的层次结构
             string? currentNotebookId = null;
             if (currentNotebookOnly)
             {
@@ -180,7 +151,6 @@ namespace OneFinder
                 string nbId = notebook.Attribute("ID")?.Value ?? string.Empty;
                 string nbName = notebook.Attribute("name")?.Value ?? "(未命名笔记本)";
 
-                // 如果仅搜索当前笔记本，跳过其他笔记本
                 if (currentNotebookOnly && !string.IsNullOrEmpty(currentNotebookId) && nbId != currentNotebookId)
                 {
                     continue;
@@ -192,7 +162,6 @@ namespace OneFinder
                 {
                     cancellationToken.ThrowIfCancellationRequested();
 
-                    // 跳过受密码保护或已加密的节
                     if (section.Attribute("locked")?.Value == "true") continue;
                     if (section.Attribute("isInRecycleBin")?.Value == "true") continue;
 
@@ -242,7 +211,6 @@ namespace OneFinder
                         }
                         catch
                         {
-                            // 单页读取失败时跳过，不影响整体搜索
                         }
                     }
                 }
@@ -335,9 +303,6 @@ namespace OneFinder
             }
         }
 
-        /// <summary>
-        /// 从页面 XML 中提取包含匹配文本的片段
-        /// </summary>
         private void ExtractTextMatches(XDocument pageDoc, string query, 
             List<string> snippets, List<string> hitObjectIds, bool fastSearch)
         {
@@ -371,11 +336,7 @@ namespace OneFinder
             }
         }
 
-        /// <summary>
-        /// 从文本中提取匹配位置的上下文片段
-        /// </summary>
-        private string ExtractSnippet(string text, int matchIndex, int matchLength, 
-            int contextLength = 30)
+        private string ExtractSnippet(string text, int matchIndex, int matchLength, int contextLength = 30)
         {
             int start = Math.Max(0, matchIndex - contextLength);
             int end = Math.Min(text.Length, matchIndex + matchLength + contextLength);
@@ -385,7 +346,6 @@ namespace OneFinder
 
             string snippet = text.Substring(start, end - start);
 
-            // 在匹配词前后添加标记（在原始文本上）
             int highlightStart = matchIndex - start;
             int highlightEnd = highlightStart + matchLength;
 
@@ -399,9 +359,6 @@ namespace OneFinder
             return NormalizeWhitespace(prefix + snippet + suffix);
         }
 
-        /// <summary>
-        /// 为单个文本节点建立纯文本镜像：逐个子节点提取、清理 CDATA/HTML，再拼接搜索。
-        /// </summary>
         private string BuildSearchableTextMirror(XElement textElement, bool fastSearch)
         {
             if (fastSearch && !textElement.HasElements)
@@ -732,6 +689,9 @@ namespace OneFinder
             return string.IsNullOrEmpty(currentPageId) ? null : currentPageId;
         }
 
+        /// <summary>
+        /// 获取当前页面的笔记本 ID
+        /// </summary>
         private string? FindNotebookIdForPage(XDocument hierarchy, string pageId)
         {
             foreach (var notebook in hierarchy.Descendants(NS + "Notebook"))
@@ -752,13 +712,12 @@ namespace OneFinder
         }
 
         /// <summary>
-        /// 在 OneNote 中打开指定页面（将焦点跳转到该页）。
+        /// 导航到指定的页面及对应的位置
         /// </summary>
         public void NavigateToPage(string pageId, string? objectId = null)
         {
             if (_app == null) throw new ObjectDisposedException(nameof(OneNoteService));
 
-            // 如果提供了对象 ID，尝试导航到页内对象
             if (!string.IsNullOrEmpty(objectId))
             {
                 try
@@ -768,11 +727,9 @@ namespace OneFinder
                 }
                 catch
                 {
-                    // 如果页内导航失败，降级为普通页面导航
                 }
             }
 
-            // 导航到页面
             _app.NavigateTo(pageId);
         }
 

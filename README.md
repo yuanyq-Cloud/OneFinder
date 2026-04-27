@@ -65,3 +65,8 @@
     ├── Ribbon.xml
     └── bin/                       # build outputs for add-in (net48)
 ```
+
+## Todo
+- [ ] 支持进阶搜索语法（AND/OR/NOT、短语搜索等）
+- [ ] 性能优化（调试模式）
+- [ ] 优化OneNote退出时的监听

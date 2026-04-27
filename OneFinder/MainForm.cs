@@ -11,30 +11,30 @@ namespace OneFinder
 {
     public partial class MainForm : Form
     {
-        // DWM API for custom title bar color
+        // DWM API
         [DllImport("dwmapi.dll")]
         private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
 
         private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
         private const int DWMWA_CAPTION_COLOR = 35;
-        private const int DWMWA_BORDER_COLOR = 34;  // Window border color
+        private const int DWMWA_BORDER_COLOR = 34;
 
-        // Modern Color Scheme (OneNote inspired)
+        // Color Scheme
         public static class ModernColors
         {
-            public static readonly Color Primary = Color.FromArgb(128, 57, 123);        // Custom Purple #80397b
-            public static readonly Color PrimaryDark = Color.FromArgb(102, 45, 98);     // Darker custom purple for hover etc.
-            public static readonly Color Accent = Color.FromArgb(185, 85, 211);         // Light Purple Accent
+            public static readonly Color Primary = Color.FromArgb(128, 57, 123);
+            public static readonly Color PrimaryDark = Color.FromArgb(102, 45, 98);
+            public static readonly Color Accent = Color.FromArgb(185, 85, 211);
             public static readonly Color Background = Color.FromArgb(250, 250, 250);
             public static readonly Color CardBackground = Color.White;
             public static readonly Color TextPrimary = Color.FromArgb(33, 33, 33);
             public static readonly Color TextSecondary = Color.FromArgb(97, 97, 97);
             public static readonly Color TextHint = Color.FromArgb(158, 158, 158);
             public static readonly Color Divider = Color.FromArgb(224, 224, 224);
-            public static readonly Color Highlight = Color.FromArgb(0, 0, 0);           // Black text for highlight
-            public static readonly Color HighlightBg = Color.FromArgb(255, 242, 0);     // OneNote Yellow Highlight
-            public static readonly Color SelectionBg = Color.FromArgb(240, 230, 250);   // Light Purple Selection
-            public static readonly Color StatusBorder = Color.FromArgb(230, 230, 230);  // Light gray for status separator
+            public static readonly Color Highlight = Color.FromArgb(0, 0, 0);
+            public static readonly Color HighlightBg = Color.FromArgb(255, 242, 0);
+            public static readonly Color SelectionBg = Color.FromArgb(240, 230, 250);
+            public static readonly Color StatusBorder = Color.FromArgb(230, 230, 230);
         }
 
         private ModernTextBox   _searchBox    = null!;
@@ -55,10 +55,8 @@ namespace OneFinder
             InitializeComponent();
             BuildModernUI();
 
-            // Custom border painting
             this.Paint += MainForm_Paint;
 
-            // Apply purple title bar after handle is created
             this.HandleCreated += (s, e) =>
             {
                 ApplyPurpleTitleBar();
@@ -75,8 +73,7 @@ namespace OneFinder
         }
 
         /// <summary>
-        /// 在后台线程等待 AddIn 发出的命名事件，收到信号后关闭 OneFinder。
-        /// AddIn 在 OnBeginShutdown（OneNote 即将退出）时 Set 该事件。
+        /// 后台等待 OneNote 退出信号并关闭 OneFinder
         /// </summary>
         private void ListenForOneNoteShutdown()
         {
@@ -90,7 +87,6 @@ namespace OneFinder
             {
                 try
                 {
-                    // WaitOne 每 500 ms 醒来检查一次取消令牌
                     while (!token.IsCancellationRequested)
                     {
                         if (shutdownEvent.WaitOne(500))
@@ -117,23 +113,18 @@ namespace OneFinder
         {
             if (Environment.OSVersion.Version.Major >= 10)
             {
-                // Convert RGB to BGR format (Windows expects BGR)
                 int r = ModernColors.Primary.R;
                 int g = ModernColors.Primary.G;
                 int b = ModernColors.Primary.B;
                 int bgrColor = b << 16 | g << 8 | r;
 
-                // Set title bar color to OneNote purple
                 DwmSetWindowAttribute(this.Handle, DWMWA_CAPTION_COLOR, ref bgrColor, sizeof(int));
-
-                // Set window border color to OneNote purple
                 DwmSetWindowAttribute(this.Handle, DWMWA_BORDER_COLOR, ref bgrColor, sizeof(int));
             }
         }
 
         private void MainForm_Paint(object? sender, PaintEventArgs e)
         {
-            // Draw custom purple border around the form
             if (FormBorderStyle == FormBorderStyle.Sizable)
             {
                 using (var pen = new Pen(ModernColors.Primary, 1))
@@ -145,7 +136,6 @@ namespace OneFinder
 
         private void BuildModernUI()
         {
-            // Form properties
             Text = "OneFinder — OneNote 全文搜索";
             Size = new Size(950, 680);
             MinimumSize = new Size(700, 500);
@@ -154,7 +144,6 @@ namespace OneFinder
             Font = new Font("Microsoft YaHei", 9.5f);
             FormBorderStyle = FormBorderStyle.Sizable;
 
-            // Main container with padding
             var mainPanel = new Panel
             {
                 Dock = DockStyle.Fill,
@@ -162,7 +151,7 @@ namespace OneFinder
                 BackColor = Color.Transparent
             };
 
-            // ── Title Bar ──────────────────────────────────────────
+            // Title Bar
             var titlePanel = new Panel
             {
                 Dock = DockStyle.Top,
@@ -182,7 +171,7 @@ namespace OneFinder
 
             titlePanel.Controls.Add(titleLabel);
 
-            // ── Unified Search Container ─────────────────────────────────────────
+            // Search Container
             var searchContainer = new SearchBoxContainer
             {
                 Dock = DockStyle.Top,
@@ -192,7 +181,7 @@ namespace OneFinder
 
             _searchBox = new ModernTextBox
             {
-                Dock = DockStyle.None, // Allow custom centering positioning from container
+                Dock = DockStyle.None,
                 Font = new Font("Microsoft YaHei", 11f),
                 PlaceholderText = "输入搜索关键词...",
                 BorderStyle = BorderStyle.None,
@@ -205,7 +194,6 @@ namespace OneFinder
             _searchBox.GotFocus += (s, e) => searchContainer.SetFocused(true);
             _searchBox.LostFocus += (s, e) => searchContainer.SetFocused(false);
 
-            // Add vertical separator
             var separator = new Panel
             {
                 Dock = DockStyle.Right,
@@ -232,7 +220,7 @@ namespace OneFinder
             searchContainer.Controls.Add(_searchButton);
             searchContainer.SetSearchBox(_searchBox);
 
-            // ── Search Options Panel ────────────────────────────────────────────
+            // Options Panel
             var optionsPanel = new FlowLayoutPanel
             {
                 Dock = DockStyle.Top,
@@ -254,7 +242,7 @@ namespace OneFinder
 
             optionsPanel.Controls.Add(_currentNotebookOnly);
 
-            // ── Results Card ─────────────────────────────────────────
+            // Results Card
             var resultsCard = new ModernCard
             {
                 Dock = DockStyle.Fill,
@@ -281,7 +269,7 @@ namespace OneFinder
 
             resultsCard.Controls.Add(_resultList);
 
-            // ── Simplified Status Bar ────────────────────────────────────────────
+            // Status Bar
             var statusPanel = new Panel
             {
                 Dock = DockStyle.Bottom,
@@ -291,7 +279,6 @@ namespace OneFinder
             };
             statusPanel.Paint += (s, e) =>
             {
-                // Draw top separator line with better visibility
                 using (var pen = new Pen(ModernColors.Divider, 1))
                 {
                     e.Graphics.DrawLine(pen, 0, 0, statusPanel.Width, 0);
@@ -322,7 +309,7 @@ namespace OneFinder
             statusPanel.Controls.Add(_progress);
             statusPanel.Controls.Add(_statusLabel);
 
-            // ── Assemble UI ──────────────────────────────────────────
+            // Assemble UI
             mainPanel.Controls.Add(resultsCard);
             mainPanel.Controls.Add(statusPanel);
             mainPanel.Controls.Add(optionsPanel);
@@ -332,7 +319,7 @@ namespace OneFinder
             Controls.Add(mainPanel);
         }
 
-        // ── Search Logic ────────────────────────────────────────────
+        // Search Logic
         private void StartSearch()
         {
             string query = _searchBox.Text.Trim();
@@ -436,7 +423,7 @@ namespace OneFinder
             _progress.Visible = false;
         }
 
-        // ── Custom Drawing ──────────────────────────────────────────
+        // Custom Drawing
         private void ResultList_DrawItem(object? sender, DrawItemEventArgs e)
         {
             if (e.Index < 0 || e.Index >= _currentResults.Count) return;
@@ -444,7 +431,6 @@ namespace OneFinder
             var match = _currentResults[e.Index];
             bool isSelected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
 
-            // Background
             Color bgColor = isSelected
                 ? ModernColors.SelectionBg
                 : (e.Index % 2 == 0 ? ModernColors.CardBackground : Color.FromArgb(252, 252, 252));
@@ -454,7 +440,6 @@ namespace OneFinder
                 e.Graphics.FillRectangle(bgBrush, e.Bounds);
             }
 
-            // Left accent bar
             if (isSelected)
             {
                 using (var accentBrush = new SolidBrush(ModernColors.Primary))
@@ -464,7 +449,6 @@ namespace OneFinder
                 }
             }
 
-            // Text brushes and fonts
             using var pageNameBrush = new SolidBrush(ModernColors.TextPrimary);
             using var pathBrush = new SolidBrush(ModernColors.TextHint);
             using var snippetBrush = new SolidBrush(ModernColors.TextSecondary);
@@ -481,19 +465,15 @@ namespace OneFinder
             float leftMargin = e.Bounds.Left + (isSelected ? 16 : 12);
             float topMargin = e.Bounds.Top + 14;
 
-            // Icon
             e.Graphics.DrawString("📄", iconFont, iconBrush,
                 new PointF(leftMargin, topMargin + 1));
 
-            // Page name (bold, first line)
-            float contentX = leftMargin + 38;  // Increased from 34 to add more margin between icon and text
+            float contentX = leftMargin + 38;
             e.Graphics.DrawString(match.PageName, pageNameFont, pageNameBrush,
                 new PointF(contentX, topMargin));
 
-            // Measure page name width for positioning path and match info
             var pageNameSize = e.Graphics.MeasureString(match.PageName, pageNameFont);
 
-            // Match info [n/m] right after page name
             string matchInfo = match.GetMatchInfo();
             float matchInfoX = contentX + pageNameSize.Width + 8;
             if (!string.IsNullOrEmpty(matchInfo))
@@ -503,19 +483,16 @@ namespace OneFinder
                 matchInfoX += e.Graphics.MeasureString(matchInfo, matchInfoFont).Width + 8;
             }
 
-            // Path (dimmed, inline after match info)
             string path = $"{match.NotebookName} › {match.SectionName}";
             e.Graphics.DrawString(path, pathFont, pathBrush,
                 new PointF(matchInfoX, topMargin + 3));
 
-            // Snippet (separate line with more spacing)
             float snippetY = topMargin + 38;
             float snippetX = contentX;
 
             DrawHighlightedSnippet(e.Graphics, match.Snippet, snippetFont,
                 snippetBrush, highlightBrush, snippetX, snippetY, e.Bounds.Width - (int)snippetX - 12);
 
-            // Bottom separator
             if (!isSelected)
             {
                 using var separatorPen = new Pen(ModernColors.Divider);
@@ -538,7 +515,6 @@ namespace OneFinder
                 {
                     string remaining = snippet.Substring(currentIndex);
 
-                    // Text clipping
                     if (g.MeasureString(remaining, font).Width + currentX - x > maxWidth)
                     {
                         while (remaining.Length > 0 &&
@@ -565,7 +541,6 @@ namespace OneFinder
 
                 string highlighted = snippet.Substring(startBracket + 1, endBracket - startBracket - 1);
 
-                // Highlight background
                 var highlightSize = g.MeasureString(highlighted, font);
                 using (var highlightBg = new SolidBrush(ModernColors.HighlightBg))
                 {
@@ -579,7 +554,7 @@ namespace OneFinder
             }
         }
 
-        // ── Navigation ──────────────────────────────────────────────
+        // Navigation
         private void ResultList_DoubleClick(object? sender, EventArgs e) =>
             NavigateToSelected();
 
@@ -607,9 +582,7 @@ namespace OneFinder
         private void SetStatus(string text) => _statusLabel.Text = text;
     }
 
-    // ══════════════════════════════════════════════════════════════════
-    // Custom Modern Controls
-    // ══════════════════════════════════════════════════════════════════
+    // Custom Controls
 
     public class ModernCard : Panel
     {
@@ -624,21 +597,18 @@ namespace OneFinder
         {
             base.OnPaint(e);
 
-            // Draw shadow
             using (var shadowBrush = new SolidBrush(Color.FromArgb(12, 0, 0, 0)))
             {
                 e.Graphics.FillRectangle(shadowBrush,
                     new Rectangle(2, 2, Width, Height));
             }
 
-            // Draw card
             using (var cardBrush = new SolidBrush(BackColor))
             {
                 e.Graphics.FillRectangle(cardBrush,
                     new Rectangle(0, 0, Width - 2, Height - 2));
             }
 
-            // Draw border
             using (var borderPen = new Pen(Color.FromArgb(224, 224, 224), 1))
             {
                 e.Graphics.DrawRectangle(borderPen,
@@ -652,14 +622,13 @@ namespace OneFinder
         public ModernTextBox()
         {
             BorderStyle = BorderStyle.None;
-            // Removed vertical padding, will center via container layout
             Padding = new Padding(12, 0, 12, 0);
             Font = new Font("Microsoft YaHei", 11f);
         }
     }
 
     /// <summary>
-    /// Unified search box container with integrated border and button
+    /// 搜索框容器
     /// </summary>
     public class SearchBoxContainer : Panel
     {
@@ -669,7 +638,7 @@ namespace OneFinder
         public SearchBoxContainer()
         {
             BackColor = Color.White;
-            Padding = new Padding(12, 1, 1, 1); // Left padding acts as margin for textbox, reduce right padding to match border
+            Padding = new Padding(12, 1, 1, 1);
             DoubleBuffered = true;
         }
 
@@ -678,7 +647,6 @@ namespace OneFinder
             base.OnLayout(levent);
             if (_searchBox != null)
             {
-                // Vertically center the textbox
                 int topOffset = (this.Height - _searchBox.Height) / 2;
                 _searchBox.Top = topOffset;
             }
@@ -687,15 +655,13 @@ namespace OneFinder
         public void SetSearchBox(TextBox searchBox)
         {
             _searchBox = searchBox;
-            // Change from Fill to Bottom | Left | Right so we can manually set Top for vertical centering
             _searchBox.Dock = DockStyle.None;
             _searchBox.Anchor = AnchorStyles.Left | AnchorStyles.Right;
             _searchBox.Left = this.Padding.Left;
-            _searchBox.Width = this.Width - 110 - 1 - this.Padding.Left - this.Padding.Right; // Account for right button + separator
+            _searchBox.Width = this.Width - 110 - 1 - this.Padding.Left - this.Padding.Right;
             int topOffset = (this.Height - _searchBox.Height) / 2;
             _searchBox.Top = topOffset;
 
-            // Re-bind to resize event so it stays centered and sized correctly
             this.Resize += (s, e) =>
             {
                 _searchBox.Width = this.Width - 110 - 1 - this.Padding.Left - this.Padding.Right;
@@ -714,7 +680,6 @@ namespace OneFinder
             base.OnPaint(e);
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
 
-            // Draw rounded rectangle border
             var borderColor = _isFocused
                 ? MainForm.ModernColors.Primary
                 : MainForm.ModernColors.Divider;
@@ -754,7 +719,7 @@ namespace OneFinder
     public class ModernButton : Button
     {
         private Color _hoverBackColor;
-        private bool _isHovering = false; // 新增：将悬浮作为一种绘制状态，而不是数据修改
+        private bool _isHovering = false;
 
         public int CornerRadius { get; set; }
         public bool RoundLeftCorners { get; set; } = true;
@@ -768,12 +733,10 @@ namespace OneFinder
             Font = new Font("Microsoft YaHei", 10f, FontStyle.Bold);
         }
 
-        // 只在代码或设计器里修改按钮背景色时才会触发，不再会被鼠标事件误伤
         protected override void OnBackColorChanged(EventArgs e)
         {
             base.OnBackColorChanged(e);
 
-            // 只需要在这里算好悬浮色备用即可，不需要再维护 _originalBackColor 了
             int r = Math.Min(255, (int)(BackColor.R * 1.15));
             int g = Math.Min(255, (int)(BackColor.G * 1.15));
             int b = Math.Min(255, (int)(BackColor.B * 1.15));
@@ -784,7 +747,6 @@ namespace OneFinder
         {
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
 
-            // 核心修复：根据状态决定用什么颜色的画刷，而不是去改 BackColor 属性
             Color currentDrawColor = _isHovering ? _hoverBackColor : BackColor;
 
             using (var bgBrush = new SolidBrush(currentDrawColor))
@@ -801,7 +763,6 @@ namespace OneFinder
                 }
             }
 
-            // Text
             var textSize = e.Graphics.MeasureString(Text, Font);
             var textX = (Width - textSize.Width) / 2;
             var textY = (Height - textSize.Height) / 2;
@@ -854,14 +815,14 @@ namespace OneFinder
         {
             base.OnMouseEnter(e);
             _isHovering = true;
-            Invalidate(); // 仅触发重绘，通知 UI 重新调用 OnPaint
+            Invalidate();
         }
 
         protected override void OnMouseLeave(EventArgs e)
         {
             base.OnMouseLeave(e);
             _isHovering = false;
-            Invalidate(); // 仅触发重绘
+            Invalidate();
         }
     }
 }

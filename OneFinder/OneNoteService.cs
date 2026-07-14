@@ -408,6 +408,9 @@ namespace OneFinder
                 string nbId = notebook.Attribute("ID")?.Value ?? string.Empty;
                 string nbName = DecodeOneNoteName(notebook.Attribute("name")?.Value ?? Loc.Get("UnnamedNotebook"));
 
+                // 跳过回收站笔记本
+                if (notebook.Attribute("isInRecycleBin")?.Value == "true") continue;
+
                 if (currentNotebookOnly && !string.IsNullOrEmpty(currentNotebookId) && nbId != currentNotebookId)
                 {
                     continue;
@@ -433,11 +436,14 @@ namespace OneFinder
 
                         if (string.IsNullOrEmpty(pageId)) continue;
 
+                        // 跳过回收站中的页面
+                        if (page.Attribute("isInRecycleBin")?.Value == "true") continue;
+
                         try
                         {
-                            // 获取页面完整 XML（包含所有文本内容）
+                            // 获取页面 XML（piBasic 跳过图片/附件二进制数据，仅保留文本结构）
                             _app.GetPageContent(pageId, out string pageXml,
-                                PageInfo.piAll, XMLSchema.xs2013);
+                                PageInfo.piBasic, XMLSchema.xs2013);
                             var snippets = new List<string>();
                             var hitObjectIds = new List<string>();
 

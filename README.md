@@ -21,59 +21,7 @@ A lightweight OneNote add-in that performs full-text search by traversing all pa
 - Visual Studio 2022+ 或 MSBuild 17+（用于从源码编译和发布）
 - .NET SDK 8.x（用于 `dotnet build` / `dotnet publish`）
 
-## 构建
-
-优先使用仓库根目录下的一键脚本 `build.ps1`：
-
-```powershell
-.\build.ps1
-```
-
-按顺序执行 4 步：
-
-| 步骤 | 命令 | 产出 |
-|------|------|------|
-| 1 | MSBuild `OneFinder.AddIn\OneFinder.AddIn.csproj` | `OneFinder.AddIn.dll`（含嵌入式 Ribbon XML 资源） |
-| 2 | dotnet publish `OneFinder\OneFinder.csproj` | 发布到 `publish\`（含 `en-US\` 卫星程序集） |
-| 3 | wix build `installer\Package.wxs` | `installer\OneFinderSetup.msi` |
-| 4 | MSBuild `installer\Setup\OneFinder.Setup.csproj` | `OneFinderSetup.exe`（嵌入 MSI 的引导程序） |
-
-最终产出：**`OneFinderSetup.exe`** — 用户下载运行的唯一文件。
-
-### 开发注意事项
-
-**不要手动逐步构建**。手动构建极易遗漏步骤，导致以下问题：
-
-| 陷阱 | 症状 |
-|------|------|
-| 未重新编译 AddIn DLL | OneNote 中 OneFinder 图标消失（Ribbon XML 资源版本不匹配） |
-| 未重新生成卫星程序集 | 选择英文后界面仍显示中文（`en-US\OneFinder.resources.dll` 未打包进 MSI） |
-| 修改 `.resx` 后只 build 不 publish | 同上（`publish\en-US\` 目录不会自动更新） |
-| 使用 `dotnet build AddIn` 代替 MSBuild | 编译失败——COM 引用项目必须用 .NET Framework MSBuild |
-| 修改 .resx key 名称后只改一处 | `Loc.Get("Key")` 的 key 必须与 `Strings.resx` 和 `Strings.en-US.resx` 三处一致 |
-
-**新增用户可见字符串的步骤：**
-1. 在 `Strings.resx` 中添加中文 `<data name="NewKey" ...>`
-2. 在 `Strings.en-US.resx` 中添加同名英文条目
-3. 在代码中用 `Loc.Get("NewKey")` 引用（不要硬编码字符串）
-4. 运行完整 `build.ps1`
-
-**语言本地化架构：**
-```
-引导程序 (OneFinderSetup.exe)
-  └→ 语言选择对话框 → 写 HKCU\Software\OneFinder\Language
-      └→ msiexec 安装 MSI
-          └→ OneFinder.exe 启动
-              ├→ Loc.Initialize() 读 HKCU → 加载 Strings.xx.resx
-              └→ MainForm/OneNoteService 用 Loc.Get() 获取字符串
-          └→ OneNote 加载 AddIn
-              └→ GetCustomUI() 读 HKCU → 返回 Ribbon.xx.xml
-```
-
-**注册表读取优先级：** HKCU → HKLM → zh-CN 默认值
-
-
-## 使用
+## 用户手册
 
 1. 工具栏”开始”选项卡中找到OneFinder工具栏，点击”全文搜索”<br>
 <img src=”UI-2.png” width=”400” alt=”OneFinder 界面预览”>
@@ -86,7 +34,7 @@ A lightweight OneNote add-in that performs full-text search by traversing all pa
 
 首次打开 OneFinder，或搜索框为空时点击搜索，会列出最近修改的页面。预览中“Def.”占位文本会被忽视。
 
-## 注意事项
+### 注意事项
 
 - 回收站中的页面、受密码保护的页面会被自动跳过
 - 同一页最多显示5条匹配结果 [5/5]
@@ -123,7 +71,44 @@ A lightweight OneNote add-in that performs full-text search by traversing all pa
     └── Ribbon.en-US.xml          # 英文 Ribbon 按钮
 ```
 
-## 开发者可调参数
+## 构建
+
+优先使用仓库根目录下的一键脚本 `build.ps1`：
+
+```powershell
+.\build.ps1
+```
+
+按顺序执行 4 步：
+
+| 步骤 | 命令 | 产出 |
+|------|------|------|
+| 1 | MSBuild `OneFinder.AddIn\OneFinder.AddIn.csproj` | `OneFinder.AddIn.dll`（含嵌入式 Ribbon XML 资源） |
+| 2 | dotnet publish `OneFinder\OneFinder.csproj` | 发布到 `publish\`（含 `en-US\` 卫星程序集） |
+| 3 | wix build `installer\Package.wxs` | `installer\OneFinderSetup.msi` |
+| 4 | MSBuild `installer\Setup\OneFinder.Setup.csproj` | `OneFinderSetup.exe`（嵌入 MSI 的引导程序） |
+
+最终产出：**`OneFinderSetup.exe`** — 用户下载运行的唯一文件。
+
+### 构建注意事项
+
+**不要手动逐步构建**。手动构建极易遗漏步骤，导致以下问题：
+
+| 陷阱 | 症状 |
+|------|------|
+| 未重新编译 AddIn DLL | OneNote 中 OneFinder 图标消失（Ribbon XML 资源版本不匹配） |
+| 未重新生成卫星程序集 | 选择英文后界面仍显示中文（`en-US\OneFinder.resources.dll` 未打包进 MSI） |
+| 修改 `.resx` 后只 build 不 publish | 同上（`publish\en-US\` 目录不会自动更新） |
+| 使用 `dotnet build AddIn` 代替 MSBuild | 编译失败——COM 引用项目必须用 .NET Framework MSBuild |
+| 修改 .resx key 名称后只改一处 | `Loc.Get("Key")` 的 key 必须与 `Strings.resx` 和 `Strings.en-US.resx` 三处一致 |
+
+**修改版本号：** 版本号由仓库根目录的 `Directory.Build.props` 统一管理，所有 `.csproj` 项目自动继承。修改时只需编辑该文件中的 `<Version>`、`<FileVersion>`。但 WiX 安装包 `installer\Package.wxs` **不读 MSBuild 属性**，以下两处需手动同步：
+- 第 8 行：`Version="x.x.x"` — MSI 包版本
+- 第 158、164 行：`Version=x.x.x.x` — COM 注册表中的 AddIn 程序集版本
+
+## 开发者注意事项
+
+### 可调参数
 
 以下常量分散在各源文件中，调整后重新编译即可生效，无需改动业务逻辑：
 
@@ -137,3 +122,24 @@ A lightweight OneNote add-in that performs full-text search by traversing all pa
 | 搜索结果行高 | `MainForm.cs` → `ItemHeight = 88` | 每条搜索结果的高度（像素），影响单页可见行数 |
 | 窗口默认尺寸 | `MainForm.cs` → `Size = new Size(950, 990)` | 首次启动或无已保存尺寸时的窗口大小 |
 | 窗口尺寸持久化路径 | `MainForm.cs` → `WindowSizeStore.FilePath` | `%LocalAppData%\OneFinder\window.json` |
+
+### i18n
+**新增i18n词条的步骤：**
+1. 在 `Strings.resx` 中添加中文 `<data name="NewKey" ...>`
+2. 在 `Strings.en-US.resx` 中添加同名英文条目
+3. 在代码中用 `Loc.Get("NewKey")` 引用（不要硬编码字符串）
+4. 运行完整 `build.ps1`
+
+**语言本地化架构：**
+```
+引导程序 (OneFinderSetup.exe)
+  └→ 语言选择对话框 → 写 HKCU\Software\OneFinder\Language
+      └→ msiexec 安装 MSI
+          └→ OneFinder.exe 启动
+              ├→ Loc.Initialize() 读 HKCU → 加载 Strings.xx.resx
+              └→ MainForm/OneNoteService 用 Loc.Get() 获取字符串
+          └→ OneNote 加载 AddIn
+              └→ GetCustomUI() 读 HKCU → 返回 Ribbon.xx.xml
+```
+
+**注册表读取优先级：** HKCU → HKLM → zh-CN 默认值

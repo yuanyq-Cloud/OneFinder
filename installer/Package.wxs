@@ -5,7 +5,7 @@
   <Package
     Name="OneFinder"
     Manufacturer="OneFinder Project"
-    Version="1.0.0"
+    Version="2.0.0"
     UpgradeCode="3F8A7B9C-1D2E-4F56-8A9B-0C1D2E3F4A5B"
     Scope="perMachine">
 
@@ -155,13 +155,13 @@
           <RegistryValue Type="string"  Value="mscoree.dll" />
           <RegistryValue Name="ThreadingModel" Type="string" Value="Both" />
           <RegistryValue Name="Class"          Type="string" Value="OneFinder.AddIn.AddIn" />
-          <RegistryValue Name="Assembly"       Type="string" Value="OneFinder.AddIn, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null" />
+          <RegistryValue Name="Assembly"       Type="string" Value="OneFinder.AddIn, Version=2.0.0.0, Culture=neutral, PublicKeyToken=null" />
           <RegistryValue Name="RuntimeVersion" Type="string" Value="v4.0.30319" />
           <RegistryValue Name="CodeBase"       Type="string" Value="file:///[INSTALLFOLDER]OneFinder.AddIn.dll" />
         </RegistryKey>
         <RegistryKey Root="HKCR" Key="CLSID\{6B29FC40-CA47-1067-B31D-00DD010662DA}\InprocServer32\1.0.0.0">
           <RegistryValue Name="Class"          Type="string" Value="OneFinder.AddIn.AddIn" />
-          <RegistryValue Name="Assembly"       Type="string" Value="OneFinder.AddIn, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null" />
+          <RegistryValue Name="Assembly"       Type="string" Value="OneFinder.AddIn, Version=2.0.0.0, Culture=neutral, PublicKeyToken=null" />
           <RegistryValue Name="RuntimeVersion" Type="string" Value="v4.0.30319" />
           <RegistryValue Name="CodeBase"       Type="string" Value="file:///[INSTALLFOLDER]OneFinder.AddIn.dll" />
         </RegistryKey>

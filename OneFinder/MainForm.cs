@@ -37,7 +37,7 @@ namespace OneFinder
             public static readonly Color Primary = Color.FromArgb(128, 57, 123);
             public static readonly Color PrimaryDark = Color.FromArgb(102, 45, 98);
             public static readonly Color Accent = Color.FromArgb(185, 85, 211);
-            public static readonly Color Background = Color.FromArgb(250, 250, 250);
+            public static readonly Color Background = Color.FromArgb(246, 246, 246);
             public static readonly Color CardBackground = Color.White;
             public static readonly Color TextPrimary = Color.FromArgb(33, 33, 33);
             public static readonly Color TextSecondary = Color.FromArgb(97, 97, 97);
@@ -51,6 +51,7 @@ namespace OneFinder
 
         private ModernTextBox   _searchBox    = null!;
         private ModernButton    _searchButton = null!;
+        private Label           _pinButton    = null!;
         private CheckBox        _currentNotebookOnly = null!;
         private ListBox         _resultList   = null!;
         private Label           _statusLabel  = null!;
@@ -70,6 +71,14 @@ namespace OneFinder
         {
             InitializeComponent();
             BuildModernUI();
+
+            // 恢复窗口置顶状态
+            var saved = WindowSizeStore.Load();
+            if (saved != null)
+            {
+                this.TopMost = saved.Value.TopMost;
+                UpdatePinButtonState();
+            }
 
             this.Paint += MainForm_Paint;
 
@@ -95,7 +104,7 @@ namespace OneFinder
             // 关闭时释放 STA 线程和 COM 连接
             this.FormClosed += (s, e) =>
             {
-                WindowSizeStore.Save(this.Width, this.Height);
+                WindowSizeStore.Save(this.Width, this.Height, this.TopMost);
                 _cts?.Cancel();
                 _shutdownCts.Cancel();
                 _scheduler.Dispose();
@@ -259,7 +268,8 @@ namespace OneFinder
         private void BuildModernUI()
         {
             Text = "OneFinder — OneNote 全文搜索";
-            Size = WindowSizeStore.Load() is (int w, int h) && w >= 700 && h >= 500
+            var saved = WindowSizeStore.Load();
+            Size = saved is (int w, int h, _) && w >= 700 && h >= 500
                 ? new Size(w, h)
                 : new Size(950, 990);
             MinimumSize = new Size(700, 500);
@@ -294,6 +304,50 @@ namespace OneFinder
 
 
             titlePanel.Controls.Add(titleLabel);
+
+            // Pin / Always-on-Top button
+            _pinButton = new Label
+            {
+                Text = "📌",
+                AutoSize = false,
+                Size = new Size(48, 50),
+                TextAlign = ContentAlignment.MiddleCenter,
+                BackColor = Color.Transparent,
+                ForeColor = ModernColors.TextSecondary,
+                Font = new Font("Segoe UI Emoji", 12f),
+                Cursor = Cursors.Hand,
+                Margin = new Padding(0),
+                Padding = new Padding(0),
+            };
+            _pinButton.Click += (s, e) =>
+            {
+                this.TopMost = !this.TopMost;
+                UpdatePinButtonState();
+                WindowSizeStore.Save(this.Width, this.Height, this.TopMost);
+            };
+            _pinButton.MouseEnter += (s, e) =>
+            {
+                if (!this.TopMost)
+                    _pinButton.ForeColor = ModernColors.Primary;
+            };
+            _pinButton.MouseLeave += (s, e) =>
+            {
+                if (!this.TopMost)
+                    _pinButton.ForeColor = ModernColors.TextSecondary;
+            };
+
+            var pinToolTip = new ToolTip();
+            pinToolTip.SetToolTip(_pinButton, "窗口置顶");
+
+            // 在 Layout 时正确定位按钮到 titlePanel 右侧
+            titlePanel.Layout += (s, e) =>
+            {
+                _pinButton.Location = new Point(
+                    titlePanel.Width - _pinButton.Width - 16,
+                    (titlePanel.Height - _pinButton.Height) / 2);
+            };
+
+            titlePanel.Controls.Add(_pinButton);
 
             // Search Container
             var searchContainer = new SearchBoxContainer
@@ -865,6 +919,22 @@ namespace OneFinder
         }
 
         private void SetStatus(string text) => _statusLabel.Text = text;
+
+        private void UpdatePinButtonState()
+        {
+            if (_pinButton == null) return;
+
+            if (this.TopMost)
+            {
+                _pinButton.ForeColor = ModernColors.Primary;
+                _pinButton.Font = new Font("Segoe UI Emoji", 13f, FontStyle.Bold);
+            }
+            else
+            {
+                _pinButton.ForeColor = ModernColors.TextSecondary;
+                _pinButton.Font = new Font("Segoe UI Emoji", 12f, FontStyle.Regular);
+            }
+        }
     }
 
     // Custom Controls
@@ -1121,7 +1191,7 @@ namespace OneFinder
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "OneFinder", "window.json");
 
-        public static (int Width, int Height)? Load()
+        public static (int Width, int Height, bool TopMost)? Load()
         {
             try
             {
@@ -1131,21 +1201,24 @@ namespace OneFinder
                     using var doc = JsonDocument.Parse(json);
                     int w = doc.RootElement.GetProperty("Width").GetInt32();
                     int h = doc.RootElement.GetProperty("Height").GetInt32();
-                    return (w, h);
+                    bool topMost = doc.RootElement.TryGetProperty("TopMost", out var tm)
+                        && tm.GetBoolean();
+                    return (w, h, topMost);
                 }
             }
             catch { }
             return null;
         }
 
-        public static void Save(int width, int height)
+        public static void Save(int width, int height, bool topMost = false)
         {
             try
             {
                 var dir = Path.GetDirectoryName(FilePath)!;
                 if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+                var topMostJson = topMost ? "true" : "false";
                 File.WriteAllText(FilePath,
-                    $"{{\"Width\":{width},\"Height\":{height}}}");
+                    $"{{\"Width\":{width},\"Height\":{height},\"TopMost\":{topMostJson}}}");
             }
             catch { }
         }

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -20,6 +21,11 @@ namespace OneFinder
         public string SectionName  { get; set; } = string.Empty;
         public string PageName     { get; set; } = string.Empty;
         public string PageId       { get; set; } = string.Empty;
+
+        /// <summary>
+        /// 页面最后修改时间（来自 OneNote Hierarchy XML 的 lastModifiedTime 属性）
+        /// </summary>
+        public DateTime LastModifiedTime { get; set; }
 
         /// <summary>
         /// 命中片段列表（包含前后文）
@@ -62,11 +68,48 @@ namespace OneFinder
         public int MatchIndex { get; set; }
         public int TotalMatches { get; set; }
 
+        /// <summary>
+        /// 页面最后修改时间（用于"最近修改"列表显示；搜索匹配为 DateTime.MinValue）
+        /// </summary>
+        public DateTime LastModifiedTime { get; set; }
+
         public string GetPagePath() =>
             $"{NotebookName}  ›  {SectionName}  ›  {PageName}";
 
         public string GetMatchInfo() =>
             TotalMatches > 1 ? $"[{MatchIndex}/{TotalMatches}]" : "";
+
+        /// <summary>
+        /// 获取用于列表显示的辅助信息：搜索结果显示匹配序号，最近修改列表显示相对时间
+        /// </summary>
+        public string GetSecondaryInfo()
+        {
+            if (LastModifiedTime != DateTime.MinValue)
+                return FormatRelativeTime(LastModifiedTime);
+            return GetMatchInfo();
+        }
+
+        public static string FormatRelativeTime(DateTime time)
+        {
+            DateTime localTime = time.Kind == DateTimeKind.Utc ? time.ToLocalTime() : time;
+            TimeSpan diff = DateTime.Now - localTime;
+
+            if (diff.TotalSeconds < 0)
+                return "刚刚";
+            if (diff.TotalSeconds < 60)
+                return "刚刚";
+            if (diff.TotalMinutes < 60)
+                return $"{(int)diff.TotalMinutes} 分钟前";
+            if (diff.TotalHours < 24)
+                return $"{(int)diff.TotalHours} 小时前";
+            if (diff.TotalDays < 2 && localTime.Date == DateTime.Now.Date.AddDays(-1))
+                return "昨天 " + localTime.ToString("HH:mm");
+            if (diff.TotalDays < 7)
+                return $"{(int)diff.TotalDays} 天前";
+            if (localTime.Year == DateTime.Now.Year)
+                return localTime.ToString("MM-dd HH:mm");
+            return localTime.ToString("yyyy-MM-dd");
+        }
     }
 
     /// <summary>
@@ -96,6 +139,40 @@ namespace OneFinder
             catch { }
         }
 
+        /// <summary>
+        /// 解码 OneNote Hierarchy XML 中 name 属性的值。
+        /// OneNote 内部会对文件名非法字符做 ^X 转义（如 + → ^M），
+        /// 同时 name 中可能含有 HTML 实体或控制字符，需一并处理。
+        /// </summary>
+        internal static string DecodeOneNoteName(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return name;
+
+            // 处理 ^X 转义序列（OneNote 文件系统层编码）
+            name = name.Replace("^M", "+")       // CR → +
+                      .Replace("^/", "/")
+                      .Replace("^\\", "\\")
+                      .Replace("^:", ":")
+                      .Replace("^*", "*")
+                      .Replace("^?", "?")
+                      .Replace("^\"", "\"")
+                      .Replace("^<", "<")
+                      .Replace("^>", ">")
+                      .Replace("^|", "|");
+
+            // HTML-decode 处理可能的实体编码（&amp;、&#43; 等）
+            name = WebUtility.HtmlDecode(name);
+
+            // 替换残留的控制字符为空格
+            var sb = new StringBuilder(name.Length);
+            foreach (char c in name)
+            {
+                sb.Append(char.IsControl(c) ? ' ' : c);
+            }
+
+            return sb.ToString().Trim();
+        }
+
         public OneNoteService()
         {
             Log("OneNoteService.ctor: creating COM Application...");
@@ -118,6 +195,173 @@ namespace OneFinder
                 _app.GetHierarchy(null, HierarchyScope.hsPages, out string hierarchyXml);
                 var hierarchy = XDocument.Parse(hierarchyXml);
                 return FindNotebookIdForPage(hierarchy, currentPageId);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// 获取最近修改的页面列表（仅解析 Hierarchy XML，不逐页获取内容，性能极快）
+        /// </summary>
+        public List<PageResult> GetRecentPages(int maxCount = 100,
+            bool currentNotebookOnly = false)
+        {
+            if (_app == null) throw new ObjectDisposedException(nameof(OneNoteService));
+
+            _app.GetHierarchy(null, HierarchyScope.hsPages, out string hierarchyXml);
+            var hierarchy = XDocument.Parse(hierarchyXml);
+
+            string? currentNotebookId = null;
+            if (currentNotebookOnly)
+            {
+                string? currentPageId = GetCurrentPageId();
+                currentNotebookId = string.IsNullOrEmpty(currentPageId)
+                    ? null
+                    : FindNotebookIdForPage(hierarchy, currentPageId);
+            }
+
+            var pages = new List<(PageResult Result, DateTime LastModified)>();
+
+            foreach (var pageEl in hierarchy.Descendants(NS + "Page"))
+            {
+                // 跳过回收站中的页面
+                if (pageEl.Attribute("isInRecycleBin")?.Value == "true") continue;
+
+                var sectionEl = pageEl.Parent;
+                if (sectionEl == null) continue;
+
+                // 跳过锁定的分区
+                if (sectionEl.Attribute("locked")?.Value == "true") continue;
+                if (sectionEl.Attribute("isInRecycleBin")?.Value == "true") continue;
+
+                var notebookEl = sectionEl.Parent;
+                if (notebookEl == null) continue;
+
+                string nbId = notebookEl.Attribute("ID")?.Value ?? string.Empty;
+                string nbName = DecodeOneNoteName(notebookEl.Attribute("name")?.Value ?? "(未命名笔记本)");
+
+                // 如果限定当前笔记本，则过滤
+                if (currentNotebookOnly && !string.IsNullOrEmpty(currentNotebookId)
+                    && nbId != currentNotebookId)
+                {
+                    continue;
+                }
+
+                string pageId = pageEl.Attribute("ID")?.Value ?? string.Empty;
+                if (string.IsNullOrEmpty(pageId)) continue;
+
+                string pageName = DecodeOneNoteName(pageEl.Attribute("name")?.Value ?? "(未命名页面)");
+                string secName  = DecodeOneNoteName(sectionEl.Attribute("name")?.Value ?? "(未命名节)");
+
+                string lastModifiedStr = pageEl.Attribute("lastModifiedTime")?.Value ?? string.Empty;
+                DateTime lastModified = DateTime.MinValue;
+                if (!string.IsNullOrEmpty(lastModifiedStr))
+                {
+                    DateTime.TryParse(lastModifiedStr, null,
+                        System.Globalization.DateTimeStyles.RoundtripKind, out lastModified);
+                }
+
+                pages.Add((new PageResult
+                {
+                    NotebookName     = nbName,
+                    SectionName      = secName,
+                    PageName         = pageName,
+                    PageId           = pageId,
+                    LastModifiedTime = lastModified,
+                    Snippets         = new List<string>(),
+                    HitObjectIds     = new List<string>(),
+                }, lastModified));
+            }
+
+            return pages
+                .OrderByDescending(p => p.LastModified)
+                .Take(maxCount)
+                .Select(p => p.Result)
+                .ToList();
+        }
+
+        /// <summary>
+        /// 提取页面开头文本作为预览（跳过 Title，取正文第一个文本段落）
+        /// </summary>
+        public string? ExtractPagePreview(string pageId, int maxLength = 120)
+        {
+            if (_app == null) throw new ObjectDisposedException(nameof(OneNoteService));
+
+            try
+            {
+                _app.GetPageContent(pageId, out string pageXml,
+                    PageInfo.piBasic, XMLSchema.xs2013);
+
+                using var stringReader = new StringReader(pageXml);
+                using var xmlReader = XmlReader.Create(stringReader, new XmlReaderSettings
+                {
+                    DtdProcessing = DtdProcessing.Prohibit,
+                    IgnoreComments = true,
+                    IgnoreProcessingInstructions = true,
+                    IgnoreWhitespace = true,
+                });
+
+                int titleDepth = -1;
+
+                while (xmlReader.Read())
+                {
+                    if (xmlReader.NodeType == XmlNodeType.Element)
+                    {
+                        if (xmlReader.LocalName == "Title")
+                        {
+                            titleDepth = xmlReader.Depth;
+                            continue;
+                        }
+
+                        if (xmlReader.LocalName != "T")
+                            continue;
+
+                        // 跳过 Title 内的文本元素
+                        if (titleDepth >= 0 && xmlReader.Depth > titleDepth)
+                        {
+                            xmlReader.Skip();
+                            continue;
+                        }
+                    }
+                    else if (xmlReader.NodeType == XmlNodeType.EndElement)
+                    {
+                        if (xmlReader.LocalName == "Title" && titleDepth >= 0)
+                        {
+                            titleDepth = -1;
+                        }
+                        continue;
+                    }
+                    else
+                    {
+                        continue;
+                    }
+
+                    // 到达此处的是非 Title 内的 <T> 元素
+                    string rawText = xmlReader.ReadInnerXml();
+                    if (string.IsNullOrWhiteSpace(rawText))
+                        continue;
+
+                    string text = BuildSearchableTextMirror(rawText, fastSearch: true);
+                    text = NormalizeWhitespace(text);
+
+                    if (string.IsNullOrWhiteSpace(text))
+                        continue;
+
+                    // 跳过无意义的占位段落（如仅含 "Def." 的缩写标记）
+                    if (text.Equals("Def.", StringComparison.OrdinalIgnoreCase)
+                        || text.Equals("Def", StringComparison.OrdinalIgnoreCase)
+                        || text.Equals("Content", StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    if (text.Length > maxLength)
+                        text = text.Substring(0, maxLength) + "…";
+
+                    return text;
+                }
+
+                return null;
             }
             catch
             {
@@ -162,7 +406,7 @@ namespace OneFinder
                 cancellationToken.ThrowIfCancellationRequested();
 
                 string nbId = notebook.Attribute("ID")?.Value ?? string.Empty;
-                string nbName = notebook.Attribute("name")?.Value ?? "(未命名笔记本)";
+                string nbName = DecodeOneNoteName(notebook.Attribute("name")?.Value ?? "(未命名笔记本)");
 
                 if (currentNotebookOnly && !string.IsNullOrEmpty(currentNotebookId) && nbId != currentNotebookId)
                 {
@@ -178,14 +422,14 @@ namespace OneFinder
                     if (section.Attribute("locked")?.Value == "true") continue;
                     if (section.Attribute("isInRecycleBin")?.Value == "true") continue;
 
-                    string secName = section.Attribute("name")?.Value ?? "(未命名节)";
+                    string secName = DecodeOneNoteName(section.Attribute("name")?.Value ?? "(未命名节)");
 
                     foreach (var page in section.Elements(NS + "Page"))
                     {
                         cancellationToken.ThrowIfCancellationRequested();
 
                         string pageId   = page.Attribute("ID")?.Value ?? string.Empty;
-                        string pageName = page.Attribute("name")?.Value ?? "(未命名页面)";
+                        string pageName = DecodeOneNoteName(page.Attribute("name")?.Value ?? "(未命名页面)");
 
                         if (string.IsNullOrEmpty(pageId)) continue;
 

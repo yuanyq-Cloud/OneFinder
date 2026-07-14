@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.IO;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -60,6 +62,10 @@ namespace OneFinder
         private readonly OneNoteScheduler _scheduler = new();
         private readonly CancellationTokenSource _shutdownCts = new();
 
+        // 预览加载刷新限流
+        private readonly System.Windows.Forms.Timer _previewRefreshTimer = new() { Interval = 1000 };
+        private bool _previewDirty;
+
         public MainForm()
         {
             InitializeComponent();
@@ -73,11 +79,23 @@ namespace OneFinder
                 ListenForOneNoteShutdown();
             };
 
-            this.Shown += (s, e) => ForceActivate();
+            this.Shown += (s, e) => { ForceActivate(); LoadRecentPages(); };
+
+            // 预览加载刷新限流定时器
+            _previewRefreshTimer.Tick += (s, e) =>
+            {
+                if (_previewDirty)
+                {
+                    _previewDirty = false;
+                    _resultList.Invalidate();
+                }
+            };
+            _previewRefreshTimer.Start();
 
             // 关闭时释放 STA 线程和 COM 连接
             this.FormClosed += (s, e) =>
             {
+                WindowSizeStore.Save(this.Width, this.Height);
                 _cts?.Cancel();
                 _shutdownCts.Cancel();
                 _scheduler.Dispose();
@@ -241,7 +259,9 @@ namespace OneFinder
         private void BuildModernUI()
         {
             Text = "OneFinder — OneNote 全文搜索";
-            Size = new Size(950, 680);
+            Size = WindowSizeStore.Load() is (int w, int h) && w >= 700 && h >= 500
+                ? new Size(w, h)
+                : new Size(950, 990);
             MinimumSize = new Size(700, 500);
             StartPosition = FormStartPosition.CenterScreen;
             BackColor = ModernColors.Background;
@@ -328,7 +348,7 @@ namespace OneFinder
             var optionsPanel = new FlowLayoutPanel
             {
                 Dock = DockStyle.Top,
-                Height = 40,
+                Height = 60,
                 Padding = new Padding(4, 1, 0, 4),
                 BackColor = Color.Transparent,
                 FlowDirection = FlowDirection.LeftToRight,
@@ -427,7 +447,11 @@ namespace OneFinder
         private void StartSearch()
         {
             string query = _searchBox.Text.Trim();
-            if (string.IsNullOrEmpty(query)) return;
+            if (string.IsNullOrEmpty(query))
+            {
+                LoadRecentPages();
+                return;
+            }
 
             _cts?.Cancel();
             _cts?.Dispose();
@@ -489,6 +513,147 @@ namespace OneFinder
             }, token);
         }
 
+        private void LoadRecentPages()
+        {
+            _cts?.Cancel();
+            _cts?.Dispose();
+            _cts = new CancellationTokenSource();
+            var token = _cts.Token;
+            int version = Interlocked.Increment(ref _searchVersion);
+            bool currentNotebookOnly = _currentNotebookOnly.Checked;
+
+            _resultList.Items.Clear();
+            _currentResults.Clear();
+            _progress.Visible = true;
+            SetStatus("正在加载最近修改的页面…");
+
+            Task.Run(async () =>
+            {
+                try
+                {
+                    // 阶段 1：快速获取元数据（单次 COM 调用）
+                    var results = await _scheduler.Run(svc => svc.GetRecentPages(
+                        maxCount: 10,
+                        currentNotebookOnly: currentNotebookOnly));
+
+                    if (token.IsCancellationRequested || version != _searchVersion) return;
+
+                    BeginInvoke(() =>
+                    {
+                        if (token.IsCancellationRequested || version != _searchVersion) return;
+                        ShowRecentResults(results);
+                        SetStatus($"最近修改的 {results.Count} 个页面 — 正在加载预览…");
+                    });
+
+                    // 阶段 2：逐页获取内容预览（渐进式）
+                    for (int i = 0; i < results.Count; i++)
+                    {
+                        if (token.IsCancellationRequested || version != _searchVersion) return;
+
+                        string pageId = results[i].PageId;
+                        try
+                        {
+                            string? preview = await _scheduler.Run(svc =>
+                                svc.ExtractPagePreview(pageId));
+
+                            if (token.IsCancellationRequested || version != _searchVersion) return;
+
+                            if (!string.IsNullOrEmpty(preview))
+                            {
+                                BeginInvoke(() =>
+                                {
+                                    if (token.IsCancellationRequested || version != _searchVersion) return;
+                                    UpdatePagePreview(pageId, preview);
+                                });
+                            }
+                        }
+                        catch
+                        {
+                            // 单个页面预览获取失败则跳过
+                        }
+                    }
+
+                    // 全部预览加载完成
+                    if (!token.IsCancellationRequested && version == _searchVersion)
+                    {
+                        BeginInvoke(() =>
+                        {
+                            if (token.IsCancellationRequested || version != _searchVersion) return;
+                            SetStatus($"最近修改的 {results.Count} 个页面 — 双击打开");
+                        });
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    if (version != _searchVersion) return;
+
+                    BeginInvoke(() =>
+                    {
+                        if (version != _searchVersion) return;
+                        SetStatus("已取消");
+                        _progress.Visible = false;
+                    });
+                }
+                catch (Exception ex)
+                {
+                    if (!token.IsCancellationRequested && version == _searchVersion)
+                        BeginInvoke(() =>
+                        {
+                            if (version != _searchVersion) return;
+                            string msg = ex is System.Runtime.InteropServices.COMException || ex is InvalidOperationException
+                                ? "无法连接到 OneNote，请确认 OneNote 已完全启动后重试。"
+                                : $"错误：{ex.Message}";
+                            SetStatus(msg);
+                            _progress.Visible = false;
+                        });
+                }
+            }, token);
+        }
+
+        private void UpdatePagePreview(string pageId, string preview)
+        {
+            for (int i = 0; i < _currentResults.Count; i++)
+            {
+                if (_currentResults[i].PageId == pageId)
+                {
+                    _currentResults[i].Snippet = preview;
+                    _previewDirty = true;
+                    return;
+                }
+            }
+        }
+
+        private void ShowRecentResults(List<PageResult> results)
+        {
+            _currentResults.Clear();
+            _resultList.Items.Clear();
+
+            foreach (var pageResult in results)
+            {
+                var matchResult = new MatchResult
+                {
+                    NotebookName     = pageResult.NotebookName,
+                    SectionName      = pageResult.SectionName,
+                    PageName         = pageResult.PageName,
+                    PageId           = pageResult.PageId,
+                    Snippet          = string.Empty,
+                    ObjectId         = null,
+                    MatchIndex       = 0,
+                    TotalMatches     = 0,
+                    LastModifiedTime = pageResult.LastModifiedTime,
+                };
+
+                _currentResults.Add(matchResult);
+                _resultList.Items.Add(matchResult);
+            }
+
+            SetStatus(results.Count == 0
+                ? "没有找到页面"
+                : $"最近修改的 {results.Count} 个页面 — 双击打开");
+
+            _progress.Visible = false;
+        }
+
         private void ShowResults(List<PageResult> results, string query)
         {
             _currentResults.Clear();
@@ -511,7 +676,8 @@ namespace OneFinder
                             ? pageResult.HitObjectIds[i]
                             : null,
                         MatchIndex = i + 1,
-                        TotalMatches = matchCount
+                        TotalMatches = matchCount,
+                        LastModifiedTime = pageResult.LastModifiedTime,
                     };
 
                     _currentResults.Add(matchResult);
@@ -570,15 +736,15 @@ namespace OneFinder
             float topMargin = e.Bounds.Top + 14;
 
             e.Graphics.DrawString("📄", iconFont, iconBrush,
-                new PointF(leftMargin, topMargin + 1));
+                new PointF(leftMargin, topMargin - 1));
 
-            float contentX = leftMargin + 38;
+            float contentX = leftMargin + 44;
             e.Graphics.DrawString(match.PageName, pageNameFont, pageNameBrush,
                 new PointF(contentX, topMargin));
 
             var pageNameSize = e.Graphics.MeasureString(match.PageName, pageNameFont);
 
-            string matchInfo = match.GetMatchInfo();
+            string matchInfo = match.GetSecondaryInfo();
             float matchInfoX = contentX + pageNameSize.Width + 8;
             if (!string.IsNullOrEmpty(matchInfo))
             {
@@ -588,14 +754,29 @@ namespace OneFinder
             }
 
             string path = $"{match.NotebookName} › {match.SectionName}";
+
+            // 路径始终在行 1 末尾
             e.Graphics.DrawString(path, pathFont, pathBrush,
                 new PointF(matchInfoX, topMargin + 3));
 
             float snippetY = topMargin + 38;
             float snippetX = contentX;
 
-            DrawHighlightedSnippet(e.Graphics, match.Snippet, snippetFont,
-                snippetBrush, highlightBrush, snippetX, snippetY, e.Bounds.Width - (int)snippetX - 12);
+            if (!string.IsNullOrEmpty(match.Snippet))
+            {
+                // 有片段内容：搜索匹配（高亮）或最近页面的预览文本
+                DrawHighlightedSnippet(e.Graphics, match.Snippet, snippetFont,
+                    snippetBrush, highlightBrush, snippetX, snippetY, e.Bounds.Width - (int)snippetX - 12);
+            }
+            else if (match.LastModifiedTime != DateTime.MinValue)
+            {
+                // 最近页面预览尚未加载
+                string placeholder = "正在加载预览…";
+                using var placeholderBrush = new SolidBrush(ModernColors.TextHint);
+                var placeholderFont = new Font("Microsoft YaHei", 9f, FontStyle.Italic);
+                e.Graphics.DrawString(placeholder, placeholderFont, placeholderBrush,
+                    new PointF(snippetX, snippetY));
+            }
 
             if (!isSelected)
             {
@@ -927,6 +1108,46 @@ namespace OneFinder
             base.OnMouseLeave(e);
             _isHovering = false;
             Invalidate();
+        }
+    }
+
+    /// <summary>
+    /// 窗口尺寸持久化 — 保存/恢复到 %LocalAppData%\OneFinder\window.json
+    /// </summary>
+    internal static class WindowSizeStore
+    {
+        private static string FilePath =>
+            Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "OneFinder", "window.json");
+
+        public static (int Width, int Height)? Load()
+        {
+            try
+            {
+                if (File.Exists(FilePath))
+                {
+                    var json = File.ReadAllText(FilePath);
+                    using var doc = JsonDocument.Parse(json);
+                    int w = doc.RootElement.GetProperty("Width").GetInt32();
+                    int h = doc.RootElement.GetProperty("Height").GetInt32();
+                    return (w, h);
+                }
+            }
+            catch { }
+            return null;
+        }
+
+        public static void Save(int width, int height)
+        {
+            try
+            {
+                var dir = Path.GetDirectoryName(FilePath)!;
+                if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+                File.WriteAllText(FilePath,
+                    $"{{\"Width\":{width},\"Height\":{height}}}");
+            }
+            catch { }
         }
     }
 }

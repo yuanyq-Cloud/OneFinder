@@ -28,12 +28,16 @@ A lightweight OneNote add-in that performs full-text search by traversing all pa
 
 ## 使用
 
-1. 工具栏“开始”选项卡中找到OneFinder工具栏，点击"全文搜索"<br>
-<img src="UI-2.png" width="400" alt="OneFinder 界面预览">
+1. 工具栏”开始”选项卡中找到OneFinder工具栏，点击”全文搜索”<br>
+<img src=”UI-2.png” width=”400” alt=”OneFinder 界面预览”>
 
-2. 在搜索框输入关键词，按 Enter 或点击"搜索"
+2. 在搜索框输入关键词，按 Enter 或点击”搜索”
 3. 等待扫描完成（底部状态栏显示当前扫描进度）
 4. 双击结果列表中的条目，OneNote 会自动跳转到对应页面
+
+### 更新：**最近修改记录**
+
+首次打开 OneFinder，或搜索框为空时点击搜索，会列出最近修改的页面。预览中“Def.”占位文本会被忽视。
 
 ## 注意事项
 
@@ -67,3 +71,18 @@ A lightweight OneNote add-in that performs full-text search by traversing all pa
     ├── Ribbon.xml
     └── bin/                       # build outputs for add-in (net48)
 ```
+
+## 开发者可调参数
+
+以下常量分散在各源文件中，调整后重新编译即可生效，无需改动业务逻辑：
+
+| 参数 | 位置 | 说明 |
+|------|------|------|
+| 最近修改页面数量 | `MainForm.cs` → `LoadRecentPages()` 中 `maxCount: 10` | 空搜索或首次打开时显示的最近页面数 |
+| 预览文本最大长度 | `OneNoteService.cs` → `ExtractPagePreview()` 中 `maxLength: 120` | 最近页面行 2 预览的字符数上限 |
+| 预览占位文本过滤 | `OneNoteService.cs` → `ExtractPagePreview()` 中的 `text.Equals("Def.", ...)` 判断 | 跳过无意义的占位段落（如仅含 `Def.`），可追加其他忽略词 |
+| 预览刷新限流间隔 | `MainForm.cs` → `_previewRefreshTimer` 的 `Interval = 200`（毫秒） | 渐进加载预览时列表重绘的最短间隔，避免闪烁 |
+| 搜索结果每页最多匹配数 | `OneNoteService.cs` → `snippets.Count >= 5` | 同一页面在搜索结果中最多显示多少条命中片段 |
+| 搜索结果行高 | `MainForm.cs` → `ItemHeight = 88` | 每条搜索结果的高度（像素），影响单页可见行数 |
+| 窗口默认尺寸 | `MainForm.cs` → `Size = new Size(950, 990)` | 首次启动或无已保存尺寸时的窗口大小 |
+| 窗口尺寸持久化路径 | `MainForm.cs` → `WindowSizeStore.FilePath` | `%LocalAppData%\OneFinder\window.json` |

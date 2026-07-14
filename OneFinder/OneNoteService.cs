@@ -38,7 +38,7 @@ namespace OneFinder
         public List<string> HitObjectIds { get; set; } = new();
 
         public override string ToString() =>
-            $"{NotebookName}  ›  {SectionName}  ›  {PageName}";
+            $"{NotebookName}  ▸ {SectionName}  ▸ {PageName}";
 
         public string GetDisplayText()
         {
@@ -74,7 +74,7 @@ namespace OneFinder
         public DateTime LastModifiedTime { get; set; }
 
         public string GetPagePath() =>
-            $"{NotebookName}  ›  {SectionName}  ›  {PageName}";
+            $"{NotebookName}  ▸ {SectionName}  ▸ {PageName}";
 
         public string GetMatchInfo() =>
             TotalMatches > 1 ? $"[{MatchIndex}/{TotalMatches}]" : "";

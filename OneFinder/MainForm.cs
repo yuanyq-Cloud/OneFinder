@@ -451,9 +451,9 @@ namespace OneFinder
             var statusPanel = new Panel
             {
                 Dock = DockStyle.Bottom,
-                Height = 36,
+                Height = 40,
                 BackColor = ModernColors.Background,
-                Padding = new Padding(10, 10, 0, 3),
+                Padding = new Padding(10, 8, 0, 1),
             };
             statusPanel.Paint += (s, e) =>
             {
@@ -482,6 +482,7 @@ namespace OneFinder
                 TextAlign = ContentAlignment.MiddleLeft,
                 ForeColor = ModernColors.TextSecondary,
                 Font = new Font(Loc.GetFontPrimary(), 8.5f),
+                UseCompatibleTextRendering = true,
             };
 
             statusPanel.Controls.Add(_progress);
@@ -807,7 +808,7 @@ namespace OneFinder
                 matchInfoX += e.Graphics.MeasureString(matchInfo, matchInfoFont).Width + 8;
             }
 
-            string path = $"{match.NotebookName} › {match.SectionName}";
+            string path = $"{match.NotebookName} ▸ {match.SectionName}";
 
             // 路径始终在行 1 末尾
             e.Graphics.DrawString(path, pathFont, pathBrush,

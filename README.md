@@ -23,7 +23,54 @@ A lightweight OneNote add-in that performs full-text search by traversing all pa
 
 ## 构建
 
-优先使用仓库根目录下的一键脚本 `build.ps1`（会完成 AddIn 的 MSBuild 构建、主程序的 `dotnet publish`，以及使用 WiX 打包 MSI）。
+优先使用仓库根目录下的一键脚本 `build.ps1`：
+
+```powershell
+.\build.ps1
+```
+
+按顺序执行 4 步：
+
+| 步骤 | 命令 | 产出 |
+|------|------|------|
+| 1 | MSBuild `OneFinder.AddIn\OneFinder.AddIn.csproj` | `OneFinder.AddIn.dll`（含嵌入式 Ribbon XML 资源） |
+| 2 | dotnet publish `OneFinder\OneFinder.csproj` | 发布到 `publish\`（含 `en-US\` 卫星程序集） |
+| 3 | wix build `installer\Package.wxs` | `installer\OneFinderSetup.msi` |
+| 4 | MSBuild `installer\Setup\OneFinder.Setup.csproj` | `OneFinderSetup.exe`（嵌入 MSI 的引导程序） |
+
+最终产出：**`OneFinderSetup.exe`** — 用户下载运行的唯一文件。
+
+### 开发注意事项
+
+**不要手动逐步构建**。手动构建极易遗漏步骤，导致以下问题：
+
+| 陷阱 | 症状 |
+|------|------|
+| 未重新编译 AddIn DLL | OneNote 中 OneFinder 图标消失（Ribbon XML 资源版本不匹配） |
+| 未重新生成卫星程序集 | 选择英文后界面仍显示中文（`en-US\OneFinder.resources.dll` 未打包进 MSI） |
+| 修改 `.resx` 后只 build 不 publish | 同上（`publish\en-US\` 目录不会自动更新） |
+| 使用 `dotnet build AddIn` 代替 MSBuild | 编译失败——COM 引用项目必须用 .NET Framework MSBuild |
+| 修改 .resx key 名称后只改一处 | `Loc.Get("Key")` 的 key 必须与 `Strings.resx` 和 `Strings.en-US.resx` 三处一致 |
+
+**新增用户可见字符串的步骤：**
+1. 在 `Strings.resx` 中添加中文 `<data name="NewKey" ...>`
+2. 在 `Strings.en-US.resx` 中添加同名英文条目
+3. 在代码中用 `Loc.Get("NewKey")` 引用（不要硬编码字符串）
+4. 运行完整 `build.ps1`
+
+**语言本地化架构：**
+```
+引导程序 (OneFinderSetup.exe)
+  └→ 语言选择对话框 → 写 HKCU\Software\OneFinder\Language
+      └→ msiexec 安装 MSI
+          └→ OneFinder.exe 启动
+              ├→ Loc.Initialize() 读 HKCU → 加载 Strings.xx.resx
+              └→ MainForm/OneNoteService 用 Loc.Get() 获取字符串
+          └→ OneNote 加载 AddIn
+              └→ GetCustomUI() 读 HKCU → 返回 Ribbon.xx.xml
+```
+
+**注册表读取优先级：** HKCU → HKLM → zh-CN 默认值
 
 
 ## 使用
@@ -51,25 +98,29 @@ A lightweight OneNote add-in that performs full-text search by traversing all pa
 ```
 <repo-root>/
 ├── README.md
-├── build.ps1
+├── build.ps1                     # 一键构建脚本（必须用）
 ├── nuget.config
 ├── OneFinder.sln
 ├── installer/
-│   ├── Package.wxs
-│   └── OneFinderSetup.wixpdb
-├── OneFinder/
-│   ├── OneFinder.csproj           # net8.0-windows, x64
+│   ├── Package.wxs               # WiX MSI 定义
+│   └── Setup/                    # 引导程序项目
+│       ├── OneFinder.Setup.csproj
+│       ├── Program.cs            # 语言选择 → 启动 msiexec
+│       └── LanguageDialog.cs     # 语言选择对话框
+├── OneFinder/                    # 主程序 net8.0-windows x64
+│   ├── OneFinder.csproj
 │   ├── Program.cs
+│   ├── Loc.cs                    # 本地化帮助类
+│   ├── Strings.resx              # 中文资源（中性/默认）
+│   ├── Strings.en-US.resx        # 英文资源
 │   ├── MainForm.cs
-│   ├── MainForm.Designer.cs
 │   ├── OneNoteService.cs
-│   ├── USER_GUIDE.md
-│   └── CHANGELOG.md
-└── OneFinder.AddIn/
-    ├── OneFinder.AddIn.csproj     # .NET Framework 4.8 add-in for OneNote
+│   └── OneNoteScheduler.cs
+└── OneFinder.AddIn/              # .NET Framework 4.8 COM AddIn
+    ├── OneFinder.AddIn.csproj
     ├── AddIn.cs
-    ├── Ribbon.xml
-    └── bin/                       # build outputs for add-in (net48)
+    ├── Ribbon.xml                # 中文 Ribbon 按钮
+    └── Ribbon.en-US.xml          # 英文 Ribbon 按钮
 ```
 
 ## 开发者可调参数

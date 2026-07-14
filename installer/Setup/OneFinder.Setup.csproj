@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <AssemblyName>OneFinderSetup</AssemblyName>
+    <RootNamespace>OneFinder.Setup</RootNamespace>
+    <UseWindowsForms>true</UseWindowsForms>
+    <LangVersion>9</LangVersion>
+    <Nullable>enable</Nullable>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <ApplicationIcon />
+  </PropertyGroup>
+
+  <!--
+    The MSI is embedded as a resource.  It is built before this project
+    (see build.ps1) so it's available at build time.
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\OneFinderSetup.msi">
+      <LogicalName>OneFinderSetup.msi</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Drawing" />
+  </ItemGroup>
+
+</Project>

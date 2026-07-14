@@ -1,0 +1,11 @@
+D:\Develop\Git_repository\make-something\OneFind\installer\Setup\bin\Release\net48\OneFinderSetup.exe.config
+D:\Develop\Git_repository\make-something\OneFind\installer\Setup\bin\Release\net48\OneFinderSetup.exe
+D:\Develop\Git_repository\make-something\OneFind\installer\Setup\bin\Release\net48\OneFinderSetup.pdb
+D:\Develop\Git_repository\make-something\OneFind\installer\Setup\obj\Release\net48\OneFinder.Setup.csproj.AssemblyReference.cache
+D:\Develop\Git_repository\make-something\OneFind\installer\Setup\obj\Release\net48\OneFinder.Setup.GeneratedMSBuildEditorConfig.editorconfig
+D:\Develop\Git_repository\make-something\OneFind\installer\Setup\obj\Release\net48\OneFinder.Setup.AssemblyInfoInputs.cache
+D:\Develop\Git_repository\make-something\OneFind\installer\Setup\obj\Release\net48\OneFinder.Setup.AssemblyInfo.cs
+D:\Develop\Git_repository\make-something\OneFind\installer\Setup\obj\Release\net48\OneFinder.Setup.csproj.CoreCompileInputs.cache
+D:\Develop\Git_repository\make-something\OneFind\installer\Setup\obj\Release\net48\OneFinder.Setup.sourcelink.json
+D:\Develop\Git_repository\make-something\OneFind\installer\Setup\obj\Release\net48\OneFinderSetup.exe
+D:\Develop\Git_repository\make-something\OneFind\installer\Setup\obj\Release\net48\OneFinderSetup.pdb

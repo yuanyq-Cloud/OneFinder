@@ -5,13 +5,15 @@
 .DESCRIPTION
     Steps:
       1. msbuild  - Build OneFinder.AddIn (.NET 4.8 COM DLL loaded by OneNote)
-      2. dotnet publish  - Publish .NET 8 main app as win-x64 self-contained single-file EXE
+      2. dotnet publish  - Publish .NET 8 main app
       3. wix build  - Package EXE + DLL + registry into MSI
+      4. msbuild  - Build Setup bootstrapper (.NET 4.8, embeds MSI, shows language picker)
 
 .PREREQUISITES
     - Visual Studio 2022+ (with .NET Framework 4.8 targeting pack)
     - .NET 8 SDK  : winget install Microsoft.DotNet.SDK.8
     - WiX v5      : dotnet tool install --global wix
+    - WiX UI ext  : wix extension add WixToolset.UI.wixext
 
 .EXAMPLE
     .\build.ps1
@@ -24,13 +26,15 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$Root         = $PSScriptRoot
-$AppProject   = Join-Path $Root "OneFinder\OneFinder.csproj"
-$AddinProject = Join-Path $Root "OneFinder.AddIn\OneFinder.AddIn.csproj"
-$WxsFile      = Join-Path $Root "installer\Package.wxs"
-$PublishDir   = Join-Path $Root "OneFinder\bin\$Configuration\net8.0-windows\win-x64\publish\"
-$AddinDir     = Join-Path $Root "OneFinder.AddIn\bin\$Configuration\net48\"
-$OutputMsi    = Join-Path $Root "installer\OneFinderSetup.msi"
+$Root             = $PSScriptRoot
+$AppProject       = Join-Path $Root "OneFinder\OneFinder.csproj"
+$AddinProject     = Join-Path $Root "OneFinder.AddIn\OneFinder.AddIn.csproj"
+$SetupProject     = Join-Path $Root "installer\Setup\OneFinder.Setup.csproj"
+$WxsFile          = Join-Path $Root "installer\Package.wxs"
+$PublishDir       = Join-Path $Root "OneFinder\bin\$Configuration\net8.0-windows\win-x64\publish\"
+$AddinDir         = Join-Path $Root "OneFinder.AddIn\bin\$Configuration\net48\"
+$OutputMsi        = Join-Path $Root "installer\OneFinderSetup.msi"
+$OutputSetupExe   = Join-Path $Root "OneFinderSetup.exe"
 
 function Find-MSBuild {
     $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
@@ -65,7 +69,7 @@ Write-Host "    MSBuild: $MSBuild" -ForegroundColor Gray
 
 # Step 1: Build OneNote addin DLL (.NET Framework 4.8)
 Write-Host ""
-Write-Host ">>> [1/3] Building OneFinder.AddIn (.NET Framework 4.8)..." -ForegroundColor Cyan
+Write-Host ">>> [1/4] Building OneFinder.AddIn (.NET Framework 4.8)..." -ForegroundColor Cyan
 
 & $MSBuild $AddinProject /p:Configuration=$Configuration /p:Platform=AnyCPU /v:minimal /nologo
 
@@ -78,9 +82,9 @@ if (-not (Test-Path $AddinDll)) {
 }
 Write-Host "    DLL: $AddinDll" -ForegroundColor Gray
 
-# Step 2: Publish self-contained single-file EXE
+# Step 2: Publish .NET 8 main app
 Write-Host ""
-Write-Host ">>> [2/3] Publishing OneFinder (self-contained, win-x64, single-file)..." -ForegroundColor Cyan
+Write-Host ">>> [2/4] Publishing OneFinder (.NET 8, win-x64)..." -ForegroundColor Cyan
 
 dotnet publish $AppProject `
     --configuration $Configuration `
@@ -102,7 +106,7 @@ Write-Host "    EXE: $ExePath ($ExeSizeMB MB)" -ForegroundColor Gray
 
 # Step 3: WiX MSI build
 Write-Host ""
-Write-Host ">>> [3/3] Building MSI..." -ForegroundColor Cyan
+Write-Host ">>> [3/4] Building MSI..." -ForegroundColor Cyan
 
 if (-not $PublishDir.EndsWith("\")) { $PublishDir += "\" }
 if (-not $AddinDir.EndsWith("\"))   { $AddinDir   += "\" }
@@ -110,12 +114,35 @@ if (-not $AddinDir.EndsWith("\"))   { $AddinDir   += "\" }
 wix build $WxsFile `
     -d "PublishDir=$PublishDir" `
     -d "AddinDir=$AddinDir" `
+    -ext WixToolset.UI.wixext `
     -arch x64 `
     -out $OutputMsi
 
 if ($LASTEXITCODE -ne 0) { Write-Error "wix build failed"; exit 1 }
 
-Write-Host ""
-Write-Host ">>> Done! MSI:" -ForegroundColor Green
 $MsiSizeMB = [math]::Round((Get-Item $OutputMsi).Length / 1MB, 1)
-Write-Host "    $OutputMsi ($MsiSizeMB MB)" -ForegroundColor Yellow
+Write-Host "    MSI: $OutputMsi ($MsiSizeMB MB)" -ForegroundColor Gray
+
+# Step 4: Build Setup bootstrapper (embeds MSI, shows language picker)
+Write-Host ""
+Write-Host ">>> [4/4] Building Setup bootstrapper (.NET Framework 4.8)..." -ForegroundColor Cyan
+
+& $MSBuild $SetupProject /p:Configuration=$Configuration /p:Platform=AnyCPU /v:minimal /nologo
+
+if ($LASTEXITCODE -ne 0) { Write-Error "Setup bootstrapper build failed"; exit 1 }
+
+$SetupBinDir = Join-Path $Root "installer\Setup\bin\$Configuration\net48"
+$SetupExe = Join-Path $SetupBinDir "OneFinderSetup.exe"
+if (-not (Test-Path $SetupExe)) {
+    Write-Error "Setup EXE not found: $SetupExe"
+    exit 1
+}
+
+# Copy to repo root for easy access
+Copy-Item $SetupExe $OutputSetupExe -Force
+$SetupSizeMB = [math]::Round((Get-Item $OutputSetupExe).Length / 1MB, 1)
+
+Write-Host ""
+Write-Host ">>> Done!" -ForegroundColor Green
+Write-Host "    MSI   : $OutputMsi ($MsiSizeMB MB)" -ForegroundColor Yellow
+Write-Host "    Setup : $OutputSetupExe ($SetupSizeMB MB)" -ForegroundColor Yellow

@@ -267,7 +267,7 @@ namespace OneFinder
 
         private void BuildModernUI()
         {
-            Text = "OneFinder — OneNote 全文搜索";
+            Text = Loc.Get("WindowTitle");
             var saved = WindowSizeStore.Load();
             Size = saved is (int w, int h, _) && w >= 700 && h >= 500
                 ? new Size(w, h)
@@ -275,7 +275,7 @@ namespace OneFinder
             MinimumSize = new Size(700, 500);
             StartPosition = FormStartPosition.CenterScreen;
             BackColor = ModernColors.Background;
-            Font = new Font("Microsoft YaHei", 9.5f);
+            Font = new Font(Loc.GetFontPrimary(), 9.5f);
             FormBorderStyle = FormBorderStyle.Sizable;
 
             var mainPanel = new Panel
@@ -295,8 +295,8 @@ namespace OneFinder
 
             var titleLabel = new Label
             {
-                Text = "🔍OneFinder",
-                Font = new Font("Microsoft YaHei", 18f, FontStyle.Bold),
+                Text = Loc.Get("TitleLabel"),
+                Font = new Font(Loc.GetFontPrimary(), 18f, FontStyle.Bold),
                 ForeColor = ModernColors.Primary,
                 AutoSize = true,
                 Location = new Point(0, 1)
@@ -308,7 +308,7 @@ namespace OneFinder
             // Pin / Always-on-Top button
             _pinButton = new Label
             {
-                Text = "📌",
+                Text = Loc.Get("PinEmoji"),
                 AutoSize = false,
                 Size = new Size(48, 50),
                 TextAlign = ContentAlignment.MiddleCenter,
@@ -337,7 +337,7 @@ namespace OneFinder
             };
 
             var pinToolTip = new ToolTip();
-            pinToolTip.SetToolTip(_pinButton, "窗口置顶");
+            pinToolTip.SetToolTip(_pinButton, Loc.Get("PinTooltip"));
 
             // 在 Layout 时正确定位按钮到 titlePanel 右侧
             titlePanel.Layout += (s, e) =>
@@ -360,8 +360,8 @@ namespace OneFinder
             _searchBox = new ModernTextBox
             {
                 Dock = DockStyle.None,
-                Font = new Font("Microsoft YaHei", 11f),
-                PlaceholderText = "输入搜索关键词...",
+                Font = new Font(Loc.GetFontPrimary(), 11f),
+                PlaceholderText = Loc.Get("SearchPlaceholder"),
                 BorderStyle = BorderStyle.None,
                 BackColor = Color.White,
             };
@@ -381,7 +381,7 @@ namespace OneFinder
 
             _searchButton = new ModernButton
             {
-                Text = "搜索",
+                Text = Loc.Get("SearchButton"),
                 Dock = DockStyle.Right,
                 Width = 110,
                 CornerRadius = 3,
@@ -389,7 +389,7 @@ namespace OneFinder
                 RoundRightCorners = true,
                 BackColor = ModernColors.Primary,
                 ForeColor = Color.White,
-                Font = new Font("Microsoft YaHei", 10.5f, FontStyle.Bold),
+                Font = new Font(Loc.GetFontPrimary(), 10.5f, FontStyle.Bold),
             };
             _searchButton.Click += (s, e) => StartSearch();
 
@@ -411,9 +411,9 @@ namespace OneFinder
 
             _currentNotebookOnly = new CheckBox
             {
-                Text = "仅搜索当前笔记本",
+                Text = Loc.Get("CurrentNotebookOnly"),
                 AutoSize = true,
-                Font = new Font("Microsoft YaHei", 9f),
+                Font = new Font(Loc.GetFontPrimary(), 9f),
                 ForeColor = ModernColors.TextSecondary,
                 Checked = false,
             };
@@ -433,7 +433,7 @@ namespace OneFinder
                 Dock = DockStyle.Fill,
                 IntegralHeight = false,
                 ItemHeight = 88,
-                Font = new Font("Microsoft YaHei", 9.5f),
+                Font = new Font(Loc.GetFontPrimary(), 9.5f),
                 DrawMode = DrawMode.OwnerDrawFixed,
                 BorderStyle = BorderStyle.None,
                 BackColor = ModernColors.CardBackground,
@@ -477,11 +477,11 @@ namespace OneFinder
             _statusLabel = new Label
             {
                 Dock = DockStyle.Fill,
-                Text = "就绪",
+                Text = Loc.Get("StatusReady"),
                 AutoSize = false,
                 TextAlign = ContentAlignment.MiddleLeft,
                 ForeColor = ModernColors.TextSecondary,
-                Font = new Font("Microsoft YaHei", 8.5f),
+                Font = new Font(Loc.GetFontPrimary(), 8.5f),
             };
 
             statusPanel.Controls.Add(_progress);
@@ -517,7 +517,7 @@ namespace OneFinder
             _resultList.Items.Clear();
             _currentResults.Clear();
             _progress.Visible = true;
-            SetStatus("正在搜索…（再次点击可中断并重新搜索）");
+            SetStatus(Loc.Get("StatusSearching"));
 
             Task.Run(async () =>
             {
@@ -547,7 +547,7 @@ namespace OneFinder
                     BeginInvoke(() =>
                     {
                         if (searchVersion != _searchVersion) return;
-                        SetStatus("搜索已取消");
+                        SetStatus(Loc.Get("StatusSearchCancelled"));
                         _progress.Visible = false;
                     });
                 }
@@ -558,8 +558,8 @@ namespace OneFinder
                         {
                             if (searchVersion != _searchVersion) return;
                             string msg = ex is System.Runtime.InteropServices.COMException || ex is InvalidOperationException
-                                ? "无法连接到 OneNote，请确认 OneNote 已完全启动后重试。"
-                                : $"错误：{ex.Message}";
+                                ? Loc.Get("ErrorCannotConnect")
+                                : Loc.Fmt("ErrorFormat", ex.Message);
                             SetStatus(msg);
                             _progress.Visible = false;
                         });
@@ -579,7 +579,7 @@ namespace OneFinder
             _resultList.Items.Clear();
             _currentResults.Clear();
             _progress.Visible = true;
-            SetStatus("正在加载最近修改的页面…");
+            SetStatus(Loc.Get("StatusLoadingRecent"));
 
             Task.Run(async () =>
             {
@@ -596,7 +596,7 @@ namespace OneFinder
                     {
                         if (token.IsCancellationRequested || version != _searchVersion) return;
                         ShowRecentResults(results);
-                        SetStatus($"最近修改的 {results.Count} 个页面 — 正在加载预览…");
+                        SetStatus(Loc.Fmt("StatusRecentLoading", results.Count));
                     });
 
                     // 阶段 2：逐页获取内容预览（渐进式）
@@ -633,7 +633,7 @@ namespace OneFinder
                         BeginInvoke(() =>
                         {
                             if (token.IsCancellationRequested || version != _searchVersion) return;
-                            SetStatus($"最近修改的 {results.Count} 个页面 — 双击打开");
+                            SetStatus(Loc.Fmt("StatusRecentDone", results.Count));
                         });
                     }
                 }
@@ -644,7 +644,7 @@ namespace OneFinder
                     BeginInvoke(() =>
                     {
                         if (version != _searchVersion) return;
-                        SetStatus("已取消");
+                        SetStatus(Loc.Get("StatusCancelled"));
                         _progress.Visible = false;
                     });
                 }
@@ -655,8 +655,8 @@ namespace OneFinder
                         {
                             if (version != _searchVersion) return;
                             string msg = ex is System.Runtime.InteropServices.COMException || ex is InvalidOperationException
-                                ? "无法连接到 OneNote，请确认 OneNote 已完全启动后重试。"
-                                : $"错误：{ex.Message}";
+                                ? Loc.Get("ErrorCannotConnect")
+                                : Loc.Fmt("ErrorFormat", ex.Message);
                             SetStatus(msg);
                             _progress.Visible = false;
                         });
@@ -702,8 +702,8 @@ namespace OneFinder
             }
 
             SetStatus(results.Count == 0
-                ? "没有找到页面"
-                : $"最近修改的 {results.Count} 个页面 — 双击打开");
+                ? Loc.Get("StatusNoPagesFound")
+                : Loc.Fmt("StatusRecentDone", results.Count));
 
             _progress.Visible = false;
         }
@@ -741,8 +741,8 @@ namespace OneFinder
             }
 
             SetStatus(results.Count == 0
-                ? $"未找到包含「{query}」的页面"
-                : $"找到 {results.Count} 个页面，共 {totalMatches} 处匹配 — 双击打开");
+                ? Loc.Fmt("StatusNoResultsForQuery", query)
+                : Loc.Fmt("StatusResultsFound", results.Count, totalMatches));
 
             _progress.Visible = false;
         }
@@ -780,16 +780,16 @@ namespace OneFinder
             using var matchInfoBrush = new SolidBrush(ModernColors.Primary);
             using var iconBrush = new SolidBrush(ModernColors.TextHint);
 
-            var pageNameFont = new Font("Microsoft YaHei", 10.5f, FontStyle.Bold);
-            var pathFont = new Font("Microsoft YaHei", 9f, FontStyle.Regular);
-            var snippetFont = new Font("Consolas", 9.5f, FontStyle.Regular);
-            var matchInfoFont = new Font("Microsoft YaHei", 8.5f, FontStyle.Bold);
-            var iconFont = new Font("Segoe UI Emoji", 12f);
+            var pageNameFont = new Font(Loc.GetFontPrimary(), 10.5f, FontStyle.Bold);
+            var pathFont = new Font(Loc.GetFontPrimary(), 9f, FontStyle.Regular);
+            var snippetFont = new Font(Loc.Get("FontConsole"), 9.5f, FontStyle.Regular);
+            var matchInfoFont = new Font(Loc.GetFontPrimary(), 8.5f, FontStyle.Bold);
+            var iconFont = new Font(Loc.Get("FontEmoji"), 12f);
 
             float leftMargin = e.Bounds.Left + (isSelected ? 16 : 12);
             float topMargin = e.Bounds.Top + 14;
 
-            e.Graphics.DrawString("📄", iconFont, iconBrush,
+            e.Graphics.DrawString(Loc.Get("PageIcon"), iconFont, iconBrush,
                 new PointF(leftMargin, topMargin - 1));
 
             float contentX = leftMargin + 44;
@@ -825,9 +825,9 @@ namespace OneFinder
             else if (match.LastModifiedTime != DateTime.MinValue)
             {
                 // 最近页面预览尚未加载
-                string placeholder = "正在加载预览…";
+                string placeholder = Loc.Get("LoadingPreview");
                 using var placeholderBrush = new SolidBrush(ModernColors.TextHint);
-                var placeholderFont = new Font("Microsoft YaHei", 9f, FontStyle.Italic);
+                var placeholderFont = new Font(Loc.GetFontPrimary(), 9f, FontStyle.Italic);
                 e.Graphics.DrawString(placeholder, placeholderFont, placeholderBrush,
                     new PointF(snippetX, snippetY));
             }
@@ -910,8 +910,8 @@ namespace OneFinder
                     {
                         var ex = t.Exception!.InnerException ?? t.Exception;
                         string msg = ex is System.Runtime.InteropServices.COMException
-                            ? $"无法连接到 OneNote，请确认 OneNote 已完全启动后重试。\n\n({ex.Message})"
-                            : $"无法打开页面：{ex.Message}";
+                            ? Loc.Get("ErrorCannotConnect") + $"\n\n({ex.Message})"
+                            : Loc.Fmt("ErrorCannotOpenPage", ex.Message);
                         BeginInvoke(() => MessageBox.Show(msg, "OneFinder",
                             MessageBoxButtons.OK, MessageBoxIcon.Warning));
                     }
@@ -978,7 +978,7 @@ namespace OneFinder
         {
             BorderStyle = BorderStyle.None;
             Padding = new Padding(12, 0, 12, 0);
-            Font = new Font("Microsoft YaHei", 11f);
+            Font = new Font(Loc.GetFontPrimary(), 11f);
         }
     }
 
@@ -1085,7 +1085,7 @@ namespace OneFinder
             FlatStyle = FlatStyle.Flat;
             FlatAppearance.BorderSize = 0;
             Cursor = Cursors.Hand;
-            Font = new Font("Microsoft YaHei", 10f, FontStyle.Bold);
+            Font = new Font(Loc.GetFontPrimary(), 10f, FontStyle.Bold);
         }
 
         protected override void OnBackColorChanged(EventArgs e)

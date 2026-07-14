@@ -1,0 +1,10 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:bal="http://wixtoolset.org/schemas/v4/wxs/bal">
+  <Bundle Name="Test" Version="1.0.0" Manufacturer="Test"
+          UpgradeCode="A1B2C3D4-E5F6-7890-ABCD-EF1234567890">
+    <BootstrapperApplicationRef Id="WixStandardBootstrapperApplication.HyperlinkLicense" />
+    <Chain>
+      <MsiPackage SourceFile="installer/OneFinderSetup.msi" />
+    </Chain>
+  </Bundle>
+</Wix>

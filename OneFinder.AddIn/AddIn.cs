@@ -153,20 +153,62 @@ namespace OneFinder.AddIn
             Log($"GetCustomUI RibbonID={RibbonID}");
             try
             {
-                var asm = Assembly.GetExecutingAssembly();
-                using (var stream = asm.GetManifestResourceStream("OneFinder.AddIn.Ribbon.xml"))
+                // Read the language preference from the registry.
+                // Checks HKCU first (set by bootstrapper), then HKLM (MSI default).
+                string language = "zh-CN";
+                try
                 {
-                    if (stream == null)
+                    var langValue = Microsoft.Win32.Registry.CurrentUser
+                        .OpenSubKey(@"Software\OneFinder")
+                        ?.GetValue("Language") as string;
+                    if (string.IsNullOrEmpty(langValue))
                     {
-                        Log("ERROR: embedded Ribbon.xml not found");
-                        return string.Empty;
+                        langValue = Microsoft.Win32.Registry.LocalMachine
+                            .OpenSubKey(@"Software\OneFinder")
+                            ?.GetValue("Language") as string;
                     }
-                    using (var reader = new StreamReader(stream))
-                    {
-                        var xml = reader.ReadToEnd();
-                        Log($"GetCustomUI OK, {xml.Length} chars");
-                        return xml;
-                    }
+                    if (!string.IsNullOrEmpty(langValue))
+                        language = langValue;
+                }
+                catch (Exception ex)
+                {
+                    Log($"GetCustomUI: registry read error: {ex.Message}");
+                }
+
+                // Select the appropriate embedded Ribbon XML resource.
+                // Try the language-specific resource first; fall back to Ribbon.xml
+                // if it's missing (e.g. addin DLL wasn't rebuilt with the new resource).
+                var asm = Assembly.GetExecutingAssembly();
+
+                string primaryResource = language == "en-US"
+                    ? "OneFinder.AddIn.Ribbon_en.xml"
+                    : "OneFinder.AddIn.Ribbon.xml";
+                string fallbackResource = "OneFinder.AddIn.Ribbon.xml";
+
+                Log($"GetCustomUI: language={language}, primary={primaryResource}");
+
+                // Try primary (language-specific) resource
+                var stream = asm.GetManifestResourceStream(primaryResource);
+
+                // If not found, try the fallback (default Chinese)
+                if (stream == null && primaryResource != fallbackResource)
+                {
+                    Log($"GetCustomUI: {primaryResource} not found, falling back to {fallbackResource}");
+                    stream = asm.GetManifestResourceStream(fallbackResource);
+                }
+
+                if (stream == null)
+                {
+                    Log($"ERROR: no Ribbon resource found (tried {primaryResource}, {fallbackResource})");
+                    return string.Empty;
+                }
+
+                using (stream)
+                using (var reader = new StreamReader(stream))
+                {
+                    var xml = reader.ReadToEnd();
+                    Log($"GetCustomUI OK, {xml.Length} chars");
+                    return xml;
                 }
             }
             catch (Exception ex)

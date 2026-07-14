@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
 
   <Package
     Name="OneFinder"
@@ -27,8 +28,12 @@
     <Launch Condition="Installed OR DOTNET8_DESKTOP_INSTALLED"
             Message="OneFinder requires the .NET 8 Desktop Runtime (x64). Please download and install it from https://aka.ms/dotnet8-desktop-runtime-win-x64 and then run this installer again." />
 
+    <!-- Tell WixUI_InstallDir which directory ID to use for the install folder picker -->
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+
     <Feature Id="Main" Title="OneFinder" Level="1">
       <ComponentGroupRef Id="AppFiles" />
+      <ComponentGroupRef Id="SatelliteFiles" />
       <ComponentGroupRef Id="AddinFiles" />
       <ComponentGroupRef Id="ComRegistry" />
       <ComponentRef Id="StartMenuShortcutComp" />
@@ -40,7 +45,9 @@
   <!-- Directory layout (WiX v5 style using StandardDirectory) -->
   <Fragment>
     <StandardDirectory Id="ProgramFiles64Folder">
-      <Directory Id="INSTALLFOLDER" Name="OneFinder" />
+      <Directory Id="INSTALLFOLDER" Name="OneFinder">
+        <Directory Id="SatelliteDir" Name="en-US" />
+      </Directory>
     </StandardDirectory>
     <StandardDirectory Id="ProgramMenuFolder">
       <Directory Id="AppMenuFolder" Name="OneFinder" />
@@ -74,6 +81,17 @@
       <Component Id="OneNoteInterop" Guid="*">
         <File Id="OneNoteInteropDll"
               Source="$(var.PublishDir)Microsoft.Office.Interop.OneNote.dll"
+              KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+
+  <!-- Satellite assembly (English resources) -->
+  <Fragment>
+    <ComponentGroup Id="SatelliteFiles" Directory="SatelliteDir">
+      <Component Id="ResourcesEnUs" Guid="*">
+        <File Id="OneFinderResourcesEnUs"
+              Source="$(var.PublishDir)en-US\OneFinder.resources.dll"
               KeyPath="yes" />
       </Component>
     </ComponentGroup>
@@ -231,6 +249,19 @@
                        Name="DesktopInstalled" Type="integer" Value="1" KeyPath="yes" />
       </Component>
     </StandardDirectory>
+  </Fragment>
+
+  <!--
+    Language preference is managed by the bootstrapper (OneFinderSetup.exe),
+    which writes HKCU\Software\OneFinder\Language before launching msiexec.
+    The app reads HKCU first, so language can be changed by re-running Setup.exe.
+  -->
+
+  <!-- UI: standard WixUI_InstallDir. Language selection is handled by the Burn bootstrapper. -->
+  <Fragment>
+    <UI>
+      <ui:WixUI Id="WixUI_InstallDir" />
+    </UI>
   </Fragment>
 
 </Wix>

@@ -18,6 +18,12 @@ namespace OneFinder
             }
 
             ApplicationConfiguration.Initialize();
+
+            // Initialize localization before any UI is created.
+            // Reads HKCU\Software\OneFinder\Language (written by the bootstrapper).
+            // Falls back to HKLM, then zh-CN.
+            Loc.Initialize();
+
             Application.Run(new MainForm());
         }
     }

@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=8.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=8.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+
+  <!-- MainForm — 窗口与标题 -->
+  <data name="WindowTitle" xml:space="preserve">
+    <value>OneFinder — OneNote 全文搜索</value>
+  </data>
+  <data name="TitleLabel" xml:space="preserve">
+    <value>🔍OneFinder</value>
+  </data>
+
+  <!-- MainForm — 搜索控件 -->
+  <data name="SearchPlaceholder" xml:space="preserve">
+    <value>输入搜索关键词...</value>
+  </data>
+  <data name="SearchButton" xml:space="preserve">
+    <value>搜索</value>
+  </data>
+
+  <!-- MainForm — 选项 -->
+  <data name="CurrentNotebookOnly" xml:space="preserve">
+    <value>仅搜索当前笔记本</value>
+  </data>
+
+  <!-- MainForm — 置顶按钮 -->
+  <data name="PinTooltip" xml:space="preserve">
+    <value>窗口置顶</value>
+  </data>
+  <data name="PinEmoji" xml:space="preserve">
+    <value>📌</value>
+  </data>
+
+  <!-- MainForm — 状态消息 -->
+  <data name="StatusReady" xml:space="preserve">
+    <value>就绪</value>
+  </data>
+  <data name="StatusSearching" xml:space="preserve">
+    <value>正在搜索…（再次点击可中断并重新搜索）</value>
+  </data>
+  <data name="StatusSearchCancelled" xml:space="preserve">
+    <value>搜索已取消</value>
+  </data>
+  <data name="StatusLoadingRecent" xml:space="preserve">
+    <value>正在加载最近修改的页面…</value>
+  </data>
+  <data name="StatusRecentLoading" xml:space="preserve">
+    <value>最近修改的 {0} 个页面 — 正在加载预览…</value>
+  </data>
+  <data name="StatusRecentDone" xml:space="preserve">
+    <value>最近修改的 {0} 个页面 — 双击打开</value>
+  </data>
+  <data name="StatusCancelled" xml:space="preserve">
+    <value>已取消</value>
+  </data>
+  <data name="StatusNoPagesFound" xml:space="preserve">
+    <value>没有找到页面</value>
+  </data>
+  <data name="StatusNoResultsForQuery" xml:space="preserve">
+    <value>未找到包含「{0}」的页面</value>
+  </data>
+  <data name="StatusResultsFound" xml:space="preserve">
+    <value>找到 {0} 个页面，共 {1} 处匹配 — 双击打开</value>
+  </data>
+
+  <!-- MainForm — 错误消息 -->
+  <data name="ErrorCannotConnect" xml:space="preserve">
+    <value>无法连接到 OneNote，请确认 OneNote 已完全启动后重试。</value>
+  </data>
+  <data name="ErrorFormat" xml:space="preserve">
+    <value>错误：{0}</value>
+  </data>
+  <data name="ErrorCannotOpenPage" xml:space="preserve">
+    <value>无法打开页面：{0}</value>
+  </data>
+
+  <!-- MainForm — 列表 -->
+  <data name="LoadingPreview" xml:space="preserve">
+    <value>正在加载预览…</value>
+  </data>
+  <data name="PageIcon" xml:space="preserve">
+    <value>📄</value>
+  </data>
+
+  <!-- MainForm — 字体 -->
+  <data name="FontConsole" xml:space="preserve">
+    <value>Consolas</value>
+  </data>
+  <data name="FontEmoji" xml:space="preserve">
+    <value>Segoe UI Emoji</value>
+  </data>
+
+  <!-- OneNoteService — 回退名称 -->
+  <data name="UnnamedNotebook" xml:space="preserve">
+    <value>(未命名笔记本)</value>
+  </data>
+  <data name="UnnamedPage" xml:space="preserve">
+    <value>(未命名页面)</value>
+  </data>
+  <data name="UnnamedSection" xml:space="preserve">
+    <value>(未命名节)</value>
+  </data>
+
+  <!-- OneNoteService — 相对时间 -->
+  <data name="TimeJustNow" xml:space="preserve">
+    <value>刚刚</value>
+  </data>
+  <data name="TimeMinutesAgo" xml:space="preserve">
+    <value>{0} 分钟前</value>
+  </data>
+  <data name="TimeHoursAgo" xml:space="preserve">
+    <value>{0} 小时前</value>
+  </data>
+  <data name="TimeYesterday" xml:space="preserve">
+    <value>昨天 {0}</value>
+  </data>
+  <data name="TimeDaysAgo" xml:space="preserve">
+    <value>{0} 天前</value>
+  </data>
+
+  <!-- OneNoteService — 搜索进度 -->
+  <data name="CannotGetCurrentNotebook" xml:space="preserve">
+    <value>无法获取当前笔记本，将搜索所有笔记本</value>
+  </data>
+  <data name="ScanningNotebook" xml:space="preserve">
+    <value>扫描笔记本：{0}</value>
+  </data>
+
+  <!-- OneNoteService — 匹配信息 -->
+  <data name="MatchCountSuffix" xml:space="preserve">
+    <value>+{0} 处匹配</value>
+  </data>
+</root>

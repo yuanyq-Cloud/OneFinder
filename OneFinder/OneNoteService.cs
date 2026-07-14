@@ -47,7 +47,7 @@ namespace OneFinder
 
             string firstSnippet = Snippets[0];
             if (Snippets.Count > 1)
-                return $"{basePath}\n    {firstSnippet} … (+{Snippets.Count - 1} 处匹配)";
+                return $"{basePath}\n    {firstSnippet} … ({Loc.Fmt("MatchCountSuffix", Snippets.Count - 1)})";
             else
                 return $"{basePath}\n    {firstSnippet}";
         }
@@ -95,17 +95,17 @@ namespace OneFinder
             TimeSpan diff = DateTime.Now - localTime;
 
             if (diff.TotalSeconds < 0)
-                return "刚刚";
+                return Loc.Get("TimeJustNow");
             if (diff.TotalSeconds < 60)
-                return "刚刚";
+                return Loc.Get("TimeJustNow");
             if (diff.TotalMinutes < 60)
-                return $"{(int)diff.TotalMinutes} 分钟前";
+                return Loc.Fmt("TimeMinutesAgo", (int)diff.TotalMinutes);
             if (diff.TotalHours < 24)
-                return $"{(int)diff.TotalHours} 小时前";
+                return Loc.Fmt("TimeHoursAgo", (int)diff.TotalHours);
             if (diff.TotalDays < 2 && localTime.Date == DateTime.Now.Date.AddDays(-1))
-                return "昨天 " + localTime.ToString("HH:mm");
+                return Loc.Fmt("TimeYesterday", localTime.ToString("HH:mm"));
             if (diff.TotalDays < 7)
-                return $"{(int)diff.TotalDays} 天前";
+                return Loc.Fmt("TimeDaysAgo", (int)diff.TotalDays);
             if (localTime.Year == DateTime.Now.Year)
                 return localTime.ToString("MM-dd HH:mm");
             return localTime.ToString("yyyy-MM-dd");
@@ -240,7 +240,7 @@ namespace OneFinder
                 if (notebookEl == null) continue;
 
                 string nbId = notebookEl.Attribute("ID")?.Value ?? string.Empty;
-                string nbName = DecodeOneNoteName(notebookEl.Attribute("name")?.Value ?? "(未命名笔记本)");
+                string nbName = DecodeOneNoteName(notebookEl.Attribute("name")?.Value ?? Loc.Get("UnnamedNotebook"));
 
                 // 如果限定当前笔记本，则过滤
                 if (currentNotebookOnly && !string.IsNullOrEmpty(currentNotebookId)
@@ -252,8 +252,8 @@ namespace OneFinder
                 string pageId = pageEl.Attribute("ID")?.Value ?? string.Empty;
                 if (string.IsNullOrEmpty(pageId)) continue;
 
-                string pageName = DecodeOneNoteName(pageEl.Attribute("name")?.Value ?? "(未命名页面)");
-                string secName  = DecodeOneNoteName(sectionEl.Attribute("name")?.Value ?? "(未命名节)");
+                string pageName = DecodeOneNoteName(pageEl.Attribute("name")?.Value ?? Loc.Get("UnnamedPage"));
+                string secName  = DecodeOneNoteName(sectionEl.Attribute("name")?.Value ?? Loc.Get("UnnamedSection"));
 
                 string lastModifiedStr = pageEl.Attribute("lastModifiedTime")?.Value ?? string.Empty;
                 DateTime lastModified = DateTime.MinValue;
@@ -396,7 +396,7 @@ namespace OneFinder
 
                 if (string.IsNullOrEmpty(currentNotebookId))
                 {
-                    progress?.Invoke("无法获取当前笔记本，将搜索所有笔记本");
+                    progress?.Invoke(Loc.Get("CannotGetCurrentNotebook"));
                     currentNotebookOnly = false;
                 }
             }
@@ -406,14 +406,14 @@ namespace OneFinder
                 cancellationToken.ThrowIfCancellationRequested();
 
                 string nbId = notebook.Attribute("ID")?.Value ?? string.Empty;
-                string nbName = DecodeOneNoteName(notebook.Attribute("name")?.Value ?? "(未命名笔记本)");
+                string nbName = DecodeOneNoteName(notebook.Attribute("name")?.Value ?? Loc.Get("UnnamedNotebook"));
 
                 if (currentNotebookOnly && !string.IsNullOrEmpty(currentNotebookId) && nbId != currentNotebookId)
                 {
                     continue;
                 }
 
-                progress?.Invoke($"扫描笔记本：{nbName}");
+                progress?.Invoke(Loc.Fmt("ScanningNotebook", nbName));
 
                 foreach (var section in notebook.Descendants(NS + "Section"))
                 {
@@ -422,14 +422,14 @@ namespace OneFinder
                     if (section.Attribute("locked")?.Value == "true") continue;
                     if (section.Attribute("isInRecycleBin")?.Value == "true") continue;
 
-                    string secName = DecodeOneNoteName(section.Attribute("name")?.Value ?? "(未命名节)");
+                    string secName = DecodeOneNoteName(section.Attribute("name")?.Value ?? Loc.Get("UnnamedSection"));
 
                     foreach (var page in section.Elements(NS + "Page"))
                     {
                         cancellationToken.ThrowIfCancellationRequested();
 
                         string pageId   = page.Attribute("ID")?.Value ?? string.Empty;
-                        string pageName = DecodeOneNoteName(page.Attribute("name")?.Value ?? "(未命名页面)");
+                        string pageName = DecodeOneNoteName(page.Attribute("name")?.Value ?? Loc.Get("UnnamedPage"));
 
                         if (string.IsNullOrEmpty(pageId)) continue;
 

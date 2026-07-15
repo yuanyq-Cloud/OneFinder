@@ -10,11 +10,13 @@ A lightweight OneNote add-in that performs full-text search by traversing all pa
 
 ## 前提条件
 
-**安装.msi（用户）**
+**安装（用户）**
 
 - Windows 10/11 x64
 - 已安装 Microsoft OneNote 或 Microsoft 365 OneNote 桌面版（OneNote COM 服务器必须存在）
 - .NET 8 Desktop Runtime（x64） — 若未安装需从 Microsoft 下载
+- .NET Framework 4.8 (通常系统已经预装）
+- 运行 OneFinderSetup.exe
 
 **开发 / 构建（开发者）**
 

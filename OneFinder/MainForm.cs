@@ -451,9 +451,9 @@ namespace OneFinder
             var statusPanel = new Panel
             {
                 Dock = DockStyle.Bottom,
-                Height = 40,
+                Height = 55,
                 BackColor = ModernColors.Background,
-                Padding = new Padding(10, 8, 0, 1),
+                Padding = new Padding(10, 20, 0, 1),
             };
             statusPanel.Paint += (s, e) =>
             {

@@ -1,6 +1,6 @@
-# OneFinder — OneNote 全文搜索工具
+# OneFinder — OneNote 无遗漏搜索工具
 
-轻量级 OneNote 插件，遍历所有笔记本页面进行全文搜索，不依赖 WSearch 索引，从而防止因内容未索引而造成的搜索遗漏。
+轻量级 OneNote 插件，遍历所有笔记本页面进行全文搜索，不依赖屎一样的 WSearch 索引，防止因内容未索引而造成的搜索遗漏。
 
 A lightweight OneNote add-in that performs full-text search by traversing all pages across all notebooks, without relying on the Windows Search index, to avoid search omissions caused by unindexed content.
 

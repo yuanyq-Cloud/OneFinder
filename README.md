@@ -6,22 +6,19 @@ A lightweight OneNote add-in that performs full-text search by traversing all pa
 
 ## 界面预览
 
-<img src="UI.png" width="600" alt="OneFinder 界面预览">
+<img src="UI-2.png" width="300" alt="OneFinder 界面预览">
+<img src="UI.png" width="300" alt="OneFinder 界面预览">
 
-## 前提条件
-
-**安装（用户）**
+## 安装（用户）
 
 - Windows 10/11 x64
-- 已安装 Microsoft OneNote 或 Microsoft 365 OneNote 桌面版（OneNote COM 服务器必须存在）
-- .NET 8 Desktop Runtime（x64） — 若未安装需从 Microsoft 下载
-- .NET Framework 4.8 (通常系统已经预装）
+- 已安装 Microsoft OneNote 或 Microsoft 365 OneNote 桌面版
+- 已安装 .NET 8 Desktop Runtime（x64）
+  
+  通过cmd命令`dotnet --list-runtimes`检测是否具备.NET 8 运行时环境，若未安装需从 Microsoft 安装 ASP.NET Core Runtime 8。
+- 关闭 OneNote（如果已打开）
 - 运行 OneFinderSetup.exe
-
-**开发 / 构建（开发者）**
-
-- Visual Studio 2022+ 或 MSBuild 17+（用于从源码编译和发布）
-- .NET SDK 8.x（用于 `dotnet build` / `dotnet publish`）
+- 运行 OneNote
 
 ## 用户手册
 
@@ -43,7 +40,7 @@ A lightweight OneNote add-in that performs full-text search by traversing all pa
 - 笔记本越多、页面越多搜索越慢，关键词仅支持完全匹配
 - 单个笔记本页面过多时，搜索期间OneNote可能会短暂未响应（由于 OneNote COM API 的架构限制，OneFinder 必须逐页调用 `GetPageContent()` 由 OneNote 主进程同步处理）
 
-## 项目结构
+## 项目结构（开发者）
 
 ```
 <repo-root>/

@@ -113,7 +113,7 @@ A lightweight OneNote add-in that performs full-text search by traversing all pa
 
 | 参数 | 位置 | 说明 |
 |------|------|------|
-| 最近修改页面数量 | `MainForm.cs` → `LoadRecentPages()` 中 `maxCount: 10` | 空搜索或首次打开时显示的最近页面数 |
+| 最近修改页面数量 | `MainForm.cs` → `LoadRecentPages()` 中 `: 10` | 空搜索或首次打开时显示的最近页面数 |
 | 预览文本最大长度 | `OneNoteService.cs` → `ExtractPagePreview()` 中 `maxLength: 120` | 最近页面行 2 预览的字符数上限 |
 | 预览占位文本过滤 | `OneNoteService.cs` → `ExtractPagePreview()` 中的 `text.Equals("Def.", ...)` 判断 | 跳过无意义的占位段落（如仅含 `Def.`），可追加其他忽略词 |
 | 预览刷新限流间隔 | `MainForm.cs` → `_previewRefreshTimer` 的 `Interval = 200`（毫秒） | 渐进加载预览时列表重绘的最短间隔，避免闪烁 |

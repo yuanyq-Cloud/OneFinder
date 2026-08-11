@@ -588,7 +588,7 @@ namespace OneFinder
                 {
                     // 阶段 1：快速获取元数据（单次 COM 调用）
                     var results = await _scheduler.Run(svc => svc.GetRecentPages(
-                        maxCount: 10,
+                        maxCount: 20,
                         currentNotebookOnly: currentNotebookOnly));
 
                     if (token.IsCancellationRequested || version != _searchVersion) return;
